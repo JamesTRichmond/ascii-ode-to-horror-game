@@ -4,7 +4,7 @@ import { UNIT, iatan2, angDiff, isqrt } from './fixed.js';
 import { IN, ET, TILE, TUNE, packInput, flood, solidAt, inShade } from './sim.js';
 import { RULE } from './chapters.js';
 
-export function createBot(opts = {}) { return { field: null, goal: -1, gx: 0, gz: 0, plan: 0, humTicks: 0, wait: 0, lastX: 0, lastZ: 0, still: 0, shake: 0, fIndex: 0, ending: opts.ending || 2, use: 0 }; }
+export function createBot(opts = {}) { return { skill: opts.skill ?? 1, field: null, goal: -1, gx: 0, gz: 0, plan: 0, humTicks: 0, wait: 0, lastX: 0, lastZ: 0, still: 0, shake: 0, fIndex: 0, ending: opts.ending || 2, use: 0 }; }
 const dist = (ax, az, bx, bz) => isqrt((ax - bx) * (ax - bx) + (az - bz) * (az - bz));
 /** Phase walls open on a timer (chapter 3), so for planning they count as passable: the bot waits at them. */
 const openable = (s, x, z) => (s.def.rule & RULE.PHASE_TIMER) && x >= 0 && z >= 0 && x < s.w && z < s.h && (s.tiles[z * s.w + x] === TILE.PA || s.tiles[z * s.w + x] === TILE.PB);
@@ -48,14 +48,18 @@ export function botInput(bot, s) {
   if (rule & RULE.FINALE && bot.ending === 1) for (const e of s.ents) if (e.type === ET.SLUMBERER && dist(p.x, p.z, e.x, e.z) < 2100) return packInput(p.breath > 40 ? IN.HUM : 0, 0);
   // threat response
   let nearD = 1e9, nearE = null; for (const e of s.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || e.type === ET.HUSK && e.mode === 0) continue; if (e.type === ET.MARCHER && !p.marked) continue; const d = dist(p.x, p.z, e.x, e.z); if (d < nearD) { nearD = d; nearE = e; } }
+  if (bot.skill === 0) { // careless player: hums idly, never holds breath, strikes only once hurt
+    if (p.measures > 0 || !(rule & RULE.MUTE_START)) if (((s.tick >> 4) * 2654435761 >>> 0) % 100 < 12 && p.breath > 200) buttons |= IN.HUM;
+    if (p.iframes > 60 && p.cooldown === 0 && p.breath >= TUNE.chordCost) buttons |= IN.CHORD;
+  } else
   if (rule & RULE.BREATH_HUNT) { let hunted = false; for (const e of s.ents) { const d = dist(p.x, p.z, e.x, e.z); if ((e.type === ET.TRIUNE && d < 6 * UNIT && e.mode !== 8) || (e.type === ET.HUSK && e.mode === 0 && d < 2500)) hunted = true; } if (hunted && p.breath > (bot.holding ? 200 : TUNE.chordCost + 80) && p.gasp === 0) { buttons |= IN.HOLD; bot.holding = 1; } else bot.holding = 0; }
-  if (nearE && nearD < 1500 && !(rule & RULE.MULTITUDE) && !(buttons & IN.HOLD) && p.cooldown === 0 && p.breath >= TUNE.chordCost) {
+  if (bot.skill > 0 && nearE && nearD < 1500 && !(rule & RULE.MULTITUDE) && !(buttons & IN.HOLD) && p.cooldown === 0 && p.breath >= TUNE.chordCost) {
     const diff = angDiff(p.ang, iatan2(nearE.z - p.z, nearE.x - p.x));
     if (Math.abs(diff) < 600 || nearD < UNIT) buttons |= IN.CHORD; else return packInput(buttons, Math.max(-300, Math.min(300, diff)));
   }
   // dawn: shelter during warning and surge
   let tx, tz;
-  if (rule & RULE.DAWN && s.c.stage !== 0) {
+  if (rule & RULE.DAWN && (bot.skill > 0 ? s.c.stage !== 0 : s.c.stage === 2)) { // the careless player ignores the warning cry
     if (inShade(s, cx, cz)) return packInput(0, 0);
     const me = new Int16Array(s.w * s.h); flood(s, me, cx, cz); let best = -1, bd = 32767;
     for (let i = 0; i < me.length; i++) if (me[i] < bd && inShade(s, i % s.w, (i / s.w) | 0)) { bd = me[i]; best = i; }

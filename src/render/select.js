@@ -72,7 +72,7 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
       let vmin = 9, vmax = 0; for (let k = 0; k < dims; k++) { if (mask & (1 << k)) { if (V[k] < vmin) vmin = V[k]; if (V[k] > vmax) vmax = V[k]; } }
       const contrast = cnt === dims ? (vmax - vmin) / (vmax + vmin + 0.02) : 1, shapeW = mt.wShape * Math.min(1, 0.12 + contrast * 3); // shape matching only where there is shape
       const mean = normalizeDescriptor(V, 0, dims), cand = atlas.dict[oMat], table = atlas.desc[dims], cell = Math.min(sel.gh - 1, (sy / CELL_H) | 0) * gw + Math.min(gw - 1, sx >> 1);
-      octDecode(normal, ci * 2, N); unproject(cam, sx, sy, d, P);
+      N[0] = gb.nrm[ci * 3]; N[1] = gb.nrm[ci * 3 + 1]; N[2] = gb.nrm[ci * 3 + 2]; unproject(cam, sx, sy, d, P);
       // --- reprojection + history validation ---
       let ok = false, prevGlyph = -1, ps = -1;
       if (temporal) {
@@ -102,11 +102,17 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
       const hid = ok ? prev.hid[ps] : oKey >> 8 ? (cellX * 7919 + cellY * 104729) | 0 : (Math.floor(P[0] * 3) * 73856093) ^ (Math.floor(P[1] * 3) * 19349663) ^ (Math.floor(P[2] * 3) * 83492791);
       cur.hid[slot] = hid;
       let best = 1e9, prevErr = 1e9;
+      // score = shape + coverage + orientation + stable variety. Cheap terms first; the shape sum bails out
+      // once it cannot beat the best (the incumbent from history is always scored in full for hysteresis).
+      const c2t = Math.cos(2 * tAng), s2t = Math.sin(2 * tAng), wO = mt.wOrient < 0.5 ? mt.wOrient * 0.15 * coh : 0, wJ = mt.jitter * 0.22, half = shapeW * 0.5, an = atlas.aniso, am = atlas.mean, ac2 = atlas.c2, as2 = atlas.s2;
       for (let c = 0; c < cand.length; c++) {
-        const gi = cand[c], dm = atlas.mean[gi] - target; let e = shapeW * shapeError(V, table, gi, dims) + 4 * dm * dm;
-        if (mt.wOrient < 0.5) { const cs = Math.cos(atlas.angle[gi] - tAng); e += mt.wOrient * 0.3 * atlas.aniso[gi] * coh * (1 - cs * cs); } else e -= 0.15 * bias * atlas.aniso[gi];
-        e += hash2(hid, gi) * mt.jitter * 0.22; if (!ok && gi === lastGlyph && mt.jitter > 0.3) e += 0.12;
-        if (e < best) { best = e; glyph = gi; } if (gi === prevGlyph) prevErr = e;
+        const gi = cand[c], dm = am[gi] - target; let e = 4 * dm * dm + hash2(hid, gi) * wJ;
+        if (wO) e += wO * an[gi] * (1 - (ac2[gi] * c2t + as2[gi] * s2t)); else e -= 0.15 * bias * an[gi];
+        if (!ok && gi === lastGlyph && mt.jitter > 0.3) e += 0.12;
+        const full = gi === prevGlyph, o = gi * dims; let sh = 0;
+        for (let k = 0; k < dims; k++) { const d = V[k] - table[o + k]; sh += d * d; if (!full && e + half * sh >= best) break; }
+        e += half * sh;
+        if (e < best) { best = e; glyph = gi; } if (full) prevErr = e;
       }
       if (glyph < 0) continue;
       if (ok && !shouldSwitch(ok, best, prevErr, opts.margin)) glyph = prevGlyph;

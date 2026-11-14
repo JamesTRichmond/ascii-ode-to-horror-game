@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] ?? true : d; };
-const out = arg('out', null), seconds = +arg('seconds', 6), quality = arg('quality', 'medium'), port = 8000 + (process.pid % 900);
+const out = arg('out', null), seconds = +arg('seconds', 6), quality = arg('quality', 'auto'), port = 8000 + (process.pid % 900);
 let chromium;
 try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_PATH || 'playwright').chromium; }
 catch { console.error('Playwright is not installed. Set PLAYWRIGHT_PATH to its package directory, or install it globally.'); process.exit(2); }
@@ -30,7 +30,7 @@ try {
     await p.goto(`${base}?chapter=${c}&autoplay=1&quality=${quality}`); await p.waitForTimeout(seconds * 1000);
     const s = await p.evaluate(() => globalThis.__ode.stats());
     if (out) await p.screenshot({ path: path.join(out, `chapter${c}.png`) });
-    report.chapters.push({ chapter: c, mode: s.mode, tick: s.tick, output: s.out.kind, glyphs: s.glyphs.emitted, frameP50: q(s.frames, 0.5), frameP95: q(s.frames, 0.95), switchP95: q(s.switchRates.map(v => v * 100), 0.95), errors: errs });
+    report.chapters.push({ chapter: c, tier: s.tier, mode: s.mode, tick: s.tick, output: s.out.kind, glyphs: s.glyphs.emitted, frameP50: q(s.frames, 0.5), frameP95: q(s.frames, 0.95), switchP95: q(s.switchRates.map(v => v * 100), 0.95), errors: errs });
     await p.close();
   }
   { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);

@@ -25,11 +25,19 @@ export function descriptorLayout(dims) {
 }
 
 /** In-place: contrast exponent, then L2 normalisation with epsilon. Returns the pre-normalisation mean. */
+// Contrast curve as a 1025-entry table with linear interpolation, shared by bake and runtime so both
+// apply bit-identical normalisation (max deviation from Math.pow below 2e-4 on [0, 1]).
+const POW_N = 1024, POW = new Float32Array(POW_N + 2);
+for (let i = 0; i <= POW_N + 1; i++) POW[i] = Math.pow(Math.min(i, POW_N) / POW_N, CONTRAST_EXPONENT);
+export function contrastCurve(x) {
+  if (x <= 0) return 0; if (x >= 1) return Math.pow(x, CONTRAST_EXPONENT);
+  const f = x * POW_N, i = f | 0; return POW[i] + (POW[i + 1] - POW[i]) * (f - i);
+}
 export function normalizeDescriptor(v, offset, dims) {
   let mean = 0, mag = 0;
   for (let k = 0; k < dims; k++) {
     const raw = v[offset + k]; mean += raw;
-    const x = Math.pow(raw < 0 ? 0 : raw, CONTRAST_EXPONENT);
+    const x = contrastCurve(raw);
     v[offset + k] = x; mag += x * x;
   }
   const inv = 1 / (Math.sqrt(mag) + NORM_EPSILON);

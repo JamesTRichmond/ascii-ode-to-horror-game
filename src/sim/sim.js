@@ -15,7 +15,7 @@ const SPAWN = { f: ET.FORSAKER, c: ET.CROWNED, s: ET.SIGH, m: ET.MIRTH, 3: ET.TR
 const STATS = {
   [ET.FORSAKER]: [11, 14, 2, 100], [ET.CROWNED]: [19, 22, 0, 0], [ET.TRAMPLER]: [22, 30, 0, 0], [ET.SIGH]: [8, 0, 1, 0],
   [ET.MIRTH]: [30, 12, 1, 0], [ET.TRIUNE]: [24, 34, 0, 100], [ET.HUSK]: [14, 12, 1, 100], [ET.BUILDER]: [17, 20, 0, 130],
-  [ET.MARCHER]: [15, 10, 0, 0], [ET.CHORISTER]: [22, 25, 0, 0], [ET.COMER]: [10, 30, 0, 120], [ET.SLUMBERER]: [0, 0, 0, 0],
+  [ET.MARCHER]: [15, 10, 0, 0], [ET.CHORISTER]: [22, 25, 0, 0], [ET.COMER]: [10, 20, 0, 120], [ET.SLUMBERER]: [0, 0, 0, 0],
 };
 export const TUNE = {
   hpMax: 100, breathMax: 1000, humDrain: 2, holdDrain: 1, regen: 2, chordCost: 320, chordCooldown: 80, chordRange: 3 * UNIT,

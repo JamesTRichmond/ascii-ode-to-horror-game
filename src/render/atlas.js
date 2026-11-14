@@ -30,7 +30,7 @@ export function parseAtlas(buf) {
   for (let m = 0; m < 64; m++) sextant[m] = byCodepoint.get(sextantCodepoint(m));
   // per-material candidate lists; blank glyphs are never candidates
   const dict = MATERIALS.map(mt => { const list = []; for (let g = 0; g < count; g++) if (mask[g] & mt.dict & 0x1ff9ff && !(flags[g] & 6) && meta[g * 4] > 0.008) list.push(g); return Int16Array.from(list); });
-  const mean = new Float32Array(count), angle = new Float32Array(count), aniso = new Float32Array(count);
-  for (let g = 0; g < count; g++) { mean[g] = meta[g * 4]; angle[g] = meta[g * 4 + 1]; aniso[g] = meta[g * 4 + 2]; }
-  return { version, count, tileW, tileH, pad, range, cols, rows, codepoint, mask, flags, uv, bearing, desc, mean, angle, aniso, byCodepoint, braille, sextant, dict, glyph: ch => byCodepoint.get(ch.codePointAt(0)) ?? 0 };
+  const mean = new Float32Array(count), angle = new Float32Array(count), aniso = new Float32Array(count), c2 = new Float32Array(count), s2 = new Float32Array(count);
+  for (let g = 0; g < count; g++) { mean[g] = meta[g * 4]; angle[g] = meta[g * 4 + 1]; aniso[g] = meta[g * 4 + 2]; c2[g] = Math.cos(2 * angle[g]); s2[g] = Math.sin(2 * angle[g]); }
+  return { version, count, tileW, tileH, pad, range, cols, rows, codepoint, mask, flags, uv, bearing, desc, mean, angle, aniso, byCodepoint, braille, sextant, dict, c2, s2, glyph: ch => byCodepoint.get(ch.codePointAt(0)) ?? 0 };
 }
