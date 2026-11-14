@@ -104,7 +104,7 @@ export const CHAPTERS = [
   },
   {
     id: 5, title: 'The Goodly House', rule: RULE.BRAZIERS, need: 0, indoor: 1, dark: 1,
-    hint: 'Carry the flame. Press E at a brazier. Humming gutters it.',
+    hint: 'Carry the flame. Press E at a brazier. Humming gutters it; relight where you began.',
     map: [
       '################################',
       '#P.....#.........#.............#',
