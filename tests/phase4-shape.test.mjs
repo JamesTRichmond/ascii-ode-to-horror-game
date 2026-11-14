@@ -96,7 +96,7 @@ test('tangent and normal debug views are populated', () => {
   const { pl } = specimen('medium', 2), img = new Uint8ClampedArray(pl.w * pl.h * 4);
   for (const mode of ['normals', 'tangents', 'flow', 'lic', 'depth', 'radiance', 'material', 'velocity', 'leaves', 'switch']) { debugImage(img, pl, mode); let nz = 0; for (let i = 0; i < img.length; i += 4) if (img[i] + img[i + 1] + img[i + 2] > 24) nz++; assert.ok(nz > (mode === 'switch' ? -1 : 500), mode); }
 });
-test('offline asset optimisation: discrete export converges to the relaxed solve, deterministically', t => {
+test('relaxation diagnostic (guide task 3-3 is not implemented): the annealed distribution collapses onto the per-leaf export, deterministically', t => {
   const a = specimen('high', 3), b = specimen('high', 3), ra = optimizeFrame(a.pl.sel, a.atlas), rb = optimizeFrame(b.pl.sel, b.atlas);
   t.diagnostic(ra.steps.map(s => `T=${s.temperature}: coverage RMS ${s.coverageRms.toFixed(4)}, descriptor RMS ${s.descriptorRms.toFixed(4)}, entropy ${s.entropy.toFixed(3)}`).join(' | '));
   assert.equal(ra.hash, rb.hash, 'replay produces identical discrete IDs');
