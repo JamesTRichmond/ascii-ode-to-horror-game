@@ -18,6 +18,12 @@ local file server, the tests and the atlas baker.
 npm test
 ```
 
+Browser acceptance (needs a local Playwright with Chromium; not a project dependency):
+
+```bash
+PLAYWRIGHT_PATH=/path/to/node_modules/playwright npm run check:browser
+```
+
 ## Documents
 
 | Document | Purpose |
@@ -44,4 +50,4 @@ Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetri
 
 ## Status
 
-Phase 3a of 6 — Production, feature-complete alpha: all nine chapters, full Nocturne pipeline.
+Phase 3b of 6 — Production, content-complete: audio, atmosphere, temporal and HUD polish.

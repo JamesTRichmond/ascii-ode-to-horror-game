@@ -135,12 +135,20 @@ Shape matching is weighted by local contrast: where a leaf has no internal struc
 | Small screens | Layout reflows to 320 px; touch controls with 48 px targets appear on coarse pointers |
 | Threat visibility | A named proximity meter stays top-centre regardless of VFX; in Chapter 9 it becomes the Slumberer's waking meter |
 | Captions | All audio cues that carry information have a text alert; stanza lines are captioned |
+| Damage | Red edge vignette on hurt and below 35 Written (static in reduced motion), plus a text alert |
+| Resonance | While humming, the objective panel shows a bearing arrow and distance to the nearest unclaimed measure, unlit brazier or open gate |
 
 ## 8. Audio direction
 
-Fully synthesised. A drone per chapter, the player's hum as a perfect fifth (G3–D4), pentatonic
-measures, footsteps, per-threat voices, stingers on alerts. Audio is presentation only and never
-feeds the simulation.
+Fully synthesised in WebAudio; no samples. Audio is presentation only and never feeds the simulation.
+
+| Layer | Design |
+|---|---|
+| Chapter beds | Per-chapter drone chord, filtered noise and LFO; surf swells on the shore chapters (1, 9); marching pulse in Chapter 6 |
+| The hum | G3 + D4 fifth through a formant band-pass; detunes flat when Breath is low; muted while holding breath |
+| Heartbeat | Rate and level follow the nearest active threat within 7 cells |
+| Spatial cues | Threat voices, hurts, walls, braziers and unwritings are stereo-panned and distance-attenuated from the listener's heading |
+| Stingers | Measures (pentatonic, one more note per measure), gate, phase turn, dawn cry, marking, gasp, endings |
 
 ## 9. Persistence
 

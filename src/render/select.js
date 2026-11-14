@@ -12,7 +12,7 @@ import { hash2 } from './light.js';
 export const INSTANCE_FLOATS = 11; // cx, cy, ax, ay, bx, by, glyph, r, g, b, alpha
 const IMP = Float32Array.from(MATERIALS.map(m => m.importance));
 const tone = l => l / (l + 0.35);
-const newHistory = (cap, cells) => ({ slotOf: new Int32Array(cells).fill(-1), key: new Uint16Array(cap), level: new Uint8Array(cap), glyph: new Int16Array(cap).fill(-1), depth: new Float32Array(cap), n: new Float32Array(cap * 3), vec: new Float32Array(cap * 24), count: 0 });
+const newHistory = (cap, cells) => ({ slotOf: new Int32Array(cells).fill(-1), key: new Uint16Array(cap), level: new Uint8Array(cap), glyph: new Int16Array(cap).fill(-1), depth: new Float32Array(cap), n: new Float32Array(cap * 3), vec: new Float32Array(cap * 24), hid: new Int32Array(cap), count: 0 });
 
 export function createSelector(w, h, capacity, atlas, noise) {
   const gw = Math.ceil(w / CELL_W), gh = Math.ceil(h / CELL_H);
@@ -97,12 +97,15 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
       }
       // --- candidate scoring: shape + coverage + orientation + neighbour + stable variety ---
       const target = Math.max(0.04, Math.min(0.5, mean * 0.62 * mt.cover)), tAng = Math.atan2(fl.ty[cell], fl.tx[cell]), coh = fl.coh[cell];
-      const hid = oKey >> 8 ? (cellX * 7919 + cellY * 104729) | 0 : (Math.floor(P[0] * 3) * 73856093) ^ (Math.floor(P[1] * 3) * 19349663) ^ (Math.floor(P[2] * 3) * 83492791);
+      // variety identity: seeded from the surface position once, then carried by validated reprojection so a
+      // tracked surface patch keeps its stroke family while the camera or the object moves
+      const hid = ok ? prev.hid[ps] : oKey >> 8 ? (cellX * 7919 + cellY * 104729) | 0 : (Math.floor(P[0] * 3) * 73856093) ^ (Math.floor(P[1] * 3) * 19349663) ^ (Math.floor(P[2] * 3) * 83492791);
+      cur.hid[slot] = hid;
       let best = 1e9, prevErr = 1e9;
       for (let c = 0; c < cand.length; c++) {
         const gi = cand[c], dm = atlas.mean[gi] - target; let e = shapeW * shapeError(V, table, gi, dims) + 4 * dm * dm;
         if (mt.wOrient < 0.5) { const cs = Math.cos(atlas.angle[gi] - tAng); e += mt.wOrient * 0.3 * atlas.aniso[gi] * coh * (1 - cs * cs); } else e -= 0.15 * bias * atlas.aniso[gi];
-        e += hash2(hid, gi) * mt.jitter * 0.22; if (gi === lastGlyph && mt.jitter > 0.3) e += 0.12;
+        e += hash2(hid, gi) * mt.jitter * 0.22; if (!ok && gi === lastGlyph && mt.jitter > 0.3) e += 0.12;
         if (e < best) { best = e; glyph = gi; } if (gi === prevGlyph) prevErr = e;
       }
       if (glyph < 0) continue;

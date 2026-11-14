@@ -1,26 +1,106 @@
-// Synthesised audio (WebAudio, no samples). Presentation only: consumes simulation events.
+// Synthesised audio (WebAudio, no samples). Presentation only: it consumes simulation events and
+// snapshots, and never feeds anything back into the simulation.
+import { ET } from '../sim/sim.js';
+
+// Per-chapter bed: root (Hz), drone interval ratios, noise colour (lowpass Hz), noise level, LFO rate
+const BEDS = {
+  1: { root: 55, ratios: [1, 1.5], noise: 700, level: 0.05, lfo: 0.09, surf: true },
+  2: { root: 61.7, ratios: [1, 1.189, 1.5], noise: 400, level: 0.02, lfo: 0.2 },
+  3: { root: 49, ratios: [1, 1.414], noise: 300, level: 0.035, lfo: 0.05 },
+  4: { root: 41.2, ratios: [1, 1.059], noise: 250, level: 0.02, lfo: 0.33, breath: true },
+  5: { root: 46.2, ratios: [1, 1.5, 2], noise: 900, level: 0.025, lfo: 0.12, crackle: true },
+  6: { root: 65.4, ratios: [1, 1.26, 1.5], noise: 500, level: 0.03, lfo: 1.0, march: true },
+  7: { root: 98, ratios: [1, 1.25, 1.5, 2], noise: 2400, level: 0.012, lfo: 0.07 },
+  8: { root: 73.4, ratios: [1, 1.5, 2.25], noise: 1800, level: 0.03, lfo: 0.15 },
+  9: { root: 82.4, ratios: [1, 1.25, 1.5, 2], noise: 1500, level: 0.04, lfo: 0.08, surf: true },
+};
+const PENTA = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2];
+const VOICE = { [ET.FORSAKER]: 140, [ET.CROWNED]: 70, [ET.TRAMPLER]: 50, [ET.MIRTH]: 520, [ET.TRIUNE]: 62, [ET.HUSK]: 180, [ET.BUILDER]: 90, [ET.MARCHER]: 110, [ET.CHORISTER]: 660, [ET.COMER]: 330 };
+
 export function createAudio() {
-  const A = { ctx: null, master: null, hum: null, volume: 0.7, ready: false };
+  const A = { ctx: null, master: null, ready: false, volume: 0.7, bed: null, hum: null, heart: 0, chapter: 0, listener: { x: 0, z: 0, yaw: 0 } };
+  const now = () => A.ctx.currentTime;
+  let noiseBuf = null;
+  const noise = () => { if (!noiseBuf) { noiseBuf = A.ctx.createBuffer(1, A.ctx.sampleRate * 2, A.ctx.sampleRate); const d = noiseBuf.getChannelData(0); let s = 1; for (let i = 0; i < d.length; i++) { s = (s * 16807) % 2147483647; d[i] = (s / 2147483647) * 2 - 1; } } const n = A.ctx.createBufferSource(); n.buffer = noiseBuf; n.loop = true; return n; };
+
   A.start = () => {
     if (A.ctx) { A.ctx.resume?.(); return; }
     const AC = globalThis.AudioContext || globalThis.webkitAudioContext; if (!AC) return;
-    A.ctx = new AC(); A.master = A.ctx.createGain(); A.master.gain.value = A.volume; A.master.connect(A.ctx.destination); A.ready = true;
-    const o = A.ctx.createOscillator(), o2 = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = 'sine'; o2.type = 'triangle'; o.frequency.value = 196; o2.frequency.value = 294; g.gain.value = 0;
-    o.connect(g); o2.connect(g); g.connect(A.master); o.start(); o2.start(); A.hum = { o, o2, g };
+    A.ctx = new AC(); A.master = A.ctx.createGain(); A.master.gain.value = A.volume;
+    const comp = A.ctx.createDynamicsCompressor(); A.master.connect(comp); comp.connect(A.ctx.destination); A.ready = true;
+    // the player's hum: a perfect fifth (G3 + D4) through a gentle formant filter
+    const g = A.ctx.createGain(), f = A.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 0.8; g.gain.value = 0;
+    const o1 = A.ctx.createOscillator(), o2 = A.ctx.createOscillator(); o1.type = 'triangle'; o2.type = 'sine'; o1.frequency.value = 196; o2.frequency.value = 293.7;
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(A.master); o1.start(); o2.start(); A.hum = { g, o1, o2 };
+    if (A.chapter) A.setChapter(A.chapter);
   };
-  A.setVolume = v => { A.volume = v; if (A.master) A.master.gain.value = v; };
-  A.tone = (freq, dur = 0.2, type = 'sine', gain = 0.2, slide = 0) => {
-    if (!A.ready) return; const t = A.ctx.currentTime, o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(A.master); o.start(t); o.stop(t + dur + 0.02);
+  A.setVolume = v => { A.volume = v; if (A.master) A.master.gain.setTargetAtTime(v, now(), 0.05); };
+
+  /** Crossfade to a chapter's ambient bed. */
+  A.setChapter = id => {
+    A.chapter = id; if (!A.ready) return;
+    if (A.bed) { const old = A.bed; old.out.gain.setTargetAtTime(0, now(), 0.8); setTimeout(() => old.nodes.forEach(n => { try { n.stop(); } catch { /* already stopped */ } }), 4000); }
+    const b = BEDS[id] || BEDS[1], out = A.ctx.createGain(), nodes = []; out.gain.value = 0; out.connect(A.master); out.gain.setTargetAtTime(1, now(), 1.2);
+    const lfo = A.ctx.createOscillator(), lfoG = A.ctx.createGain(); lfo.frequency.value = b.lfo; lfoG.gain.value = 0.35; lfo.connect(lfoG); lfo.start(); nodes.push(lfo);
+    b.ratios.forEach((r, i) => { const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = i ? 'sine' : 'sawtooth'; o.frequency.value = b.root * r; o.detune.value = (i - 1) * 4; g.gain.value = i ? 0.035 : 0.025; const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260 + i * 140; o.connect(lp); lp.connect(g); g.connect(out); lfoG.connect(g.gain); o.start(); nodes.push(o); });
+    const n = noise(), nf = A.ctx.createBiquadFilter(), ng = A.ctx.createGain(); nf.type = 'lowpass'; nf.frequency.value = b.noise; ng.gain.value = b.level; n.connect(nf); nf.connect(ng); ng.connect(out); n.start(); nodes.push(n);
+    if (b.surf) { const sl = A.ctx.createOscillator(), sg = A.ctx.createGain(); sl.frequency.value = 0.11; sg.gain.value = b.level * 1.6; sl.connect(sg); sg.connect(ng.gain); sl.start(); nodes.push(sl); }
+    A.bed = { out, nodes, def: b, beat: 0 };
   };
-  A.update = (sim) => { if (!A.ready) return; A.hum.g.gain.setTargetAtTime(sim.p.hum ? 0.16 : 0, A.ctx.currentTime, 0.06); };
+
+  /** Short synthesised tone; `pan` is -1..1. */
+  A.tone = (freq, dur = 0.2, type = 'sine', gain = 0.2, slide = 0, pan = 0, delay = 0) => {
+    if (!A.ready) return; const t = now() + delay, o = A.ctx.createOscillator(), g = A.ctx.createGain(), p = A.ctx.createStereoPanner?.();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p); p.connect(A.master); } else g.connect(A.master); o.start(t); o.stop(t + dur + 0.05);
+  };
+  A.hiss = (dur, freq, gain, pan = 0, sweep = 1) => {
+    if (!A.ready) return; const t = now(), n = noise(), f = A.ctx.createBiquadFilter(), g = A.ctx.createGain(), p = A.ctx.createStereoPanner?.();
+    f.type = 'bandpass'; f.Q.value = 1.4; f.frequency.setValueAtTime(freq, t); f.frequency.exponentialRampToValueAtTime(freq * sweep, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(f); f.connect(g); if (p) { p.pan.value = pan; g.connect(p); p.connect(A.master); } else g.connect(A.master); n.start(t); n.stop(t + dur + 0.05);
+  };
+  /** Stereo pan and distance gain of a world point (simulation units) relative to the listener. */
+  const place = (x, z) => { const L = A.listener, dx = x - L.x, dz = z - L.z, d = Math.hypot(dx, dz) / 1024, side = (-dx * Math.sin(L.yaw) + dz * Math.cos(L.yaw)) / (Math.hypot(dx, dz) || 1); return { pan: side, gain: 1 / (1 + d * 0.35) }; };
+
+  /** Per-frame continuous layers: hum level, heartbeat from threat proximity, march pulse. */
+  A.update = (sim, pl, dt) => {
+    if (!A.ready || !sim) return; const p = sim.p; A.listener = { x: p.x, z: p.z, yaw: (p.ang / 4096) * Math.PI * 2 };
+    A.hum.g.gain.setTargetAtTime(p.hum ? 0.12 : 0, now(), 0.06); A.hum.o1.detune.setTargetAtTime(p.breath < 200 ? -30 : 0, now(), 0.2);
+    let near = 1e9; for (const e of sim.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || (e.type === ET.MARCHER && !p.marked) || (e.type === ET.HUSK && e.mode === 0)) continue; near = Math.min(near, Math.hypot(e.x - p.x, e.z - p.z) / 1024); }
+    const fear = Math.max(0, Math.min(1, 1 - near / 7)), rate = 0.9 + fear * 1.6; A.heart += dt * rate;
+    if (fear > 0.05 && A.heart >= 1) { A.heart = 0; A.tone(48, 0.16, 'sine', 0.25 * fear + 0.05); A.tone(44, 0.14, 'sine', 0.18 * fear + 0.04, 0, 0, 0.18); } else if (A.heart >= 1) A.heart = 0;
+    const b = A.bed?.def; if (b?.march) { A.bed.beat += dt; if (A.bed.beat >= 0.5) { A.bed.beat = 0; A.hiss(0.09, 180, p.marked ? 0.25 : 0.08); } }
+    if (b?.breath && p.hold) A.hum.g.gain.setTargetAtTime(0, now(), 0.02);
+  };
+
   A.event = e => {
+    if (!A.ready) return; const at = place(e.x, e.z);
     switch (e.type) {
-      case 'step': A.tone(e.a ? 60 : 85, 0.07, 'triangle', e.a ? 0.03 : 0.09, 0.6); break;
-      case 'measure': [392, 494, 587].forEach((f, i) => setTimeout(() => A.tone(f, 0.5, 'sine', 0.16), i * 110)); break;
-      case 'chord': [196, 247, 294, 392].forEach(f => A.tone(f, 0.7, 'sawtooth', 0.08, 0.98)); break;
-      case 'hurt': A.tone(110, 0.3, 'square', 0.14, 0.4); break;
-      case 'gate': A.tone(147, 1.2, 'sine', 0.2, 2); break;
+      case 'step': A.hiss(0.06, e.a ? 600 : 1100, (e.a ? 0.03 : 0.07) * at.gain, 0, 0.6); break;
+      case 'measure': PENTA.slice(0, 3 + e.a).forEach((r, i) => A.tone(392 * r, 0.9, 'sine', 0.12, 0, (i - 1) * 0.3, i * 0.11)); break;
+      case 'chord': [196, 247, 294, 392].forEach((f, i) => A.tone(f, 0.9, 'sawtooth', 0.07, 0.97, (i - 1.5) * 0.4)); A.hiss(0.6, 2000, 0.15, 0, 0.3); break;
+      case 'hurt': A.tone(110, 0.35, 'square', 0.14, 0.4, at.pan); A.hiss(0.25, 300, 0.2, at.pan); break;
+      case 'death': A.tone(220, 2.5, 'sawtooth', 0.12, 0.25); A.hiss(2.5, 4000, 0.2, 0, 0.05); break;
+      case 'gate': [1, 1.5, 2].forEach((r, i) => A.tone(147 * r, 2.2, 'sine', 0.12, 1, 0, i * 0.2)); break;
+      case 'alert': A.tone(VOICE[e.a] || 120, 0.8, e.a === ET.CHORISTER || e.a === ET.MIRTH ? 'triangle' : 'sawtooth', 0.12 * at.gain + 0.03, e.a === ET.MIRTH ? 1.6 : 0.7, at.pan); break;
+      case 'stagger': A.tone((VOICE[e.a] || 120) * 0.8, 0.4, 'triangle', 0.08, 0.5, at.pan); break;
+      case 'unwritten': A.hiss(1.2, 3000, 0.18 * at.gain, at.pan, 0.1); A.tone((VOICE[e.a] || 200) * 2, 0.8, 'sine', 0.08, 0.3, at.pan); break;
+      case 'sigh': A.hiss(1.4, 400, 0.1 * at.gain, at.pan, 0.5); break;
+      case 'phaseWarn': A.tone(70, 1.5, 'sawtooth', 0.1, 1.3); break;
+      case 'phase': A.hiss(1.2, 200, 0.25, 0, 8); A.tone(e.a ? 330 : 82, 1.2, 'sine', 0.12, e.a ? 1.5 : 0.7); break;
+      case 'wall': A.hiss(0.8, 120, 0.25 * at.gain, at.pan, 0.5); A.tone(55, 0.8, 'square', 0.06 * at.gain, 0.8, at.pan); break;
+      case 'trample': [0, 0.25, 0.5].forEach(d => A.tone(41, 0.4, 'square', 0.16, 0.5, at.pan, d)); break;
+      case 'surgeWarn': A.tone(440, 1.4, 'sawtooth', 0.09, 2.2); A.tone(660, 1.4, 'sawtooth', 0.06, 2.2, 0, 0.15); break;
+      case 'surge': A.hiss(1.6, 6000, 0.2, 0, 0.5); break;
+      case 'marked': A.hiss(1.2, 500, 0.3, 0, 1.6); A.tone(110, 1, 'sawtooth', 0.12, 1.1); break;
+      case 'brazier': A.hiss(1.2, 1800, 0.2 * at.gain, at.pan, 0.4); A.tone(294, 1.5, 'sine', 0.1, 1); break;
+      case 'gutter': A.hiss(0.5, 2500, 0.15, 0, 0.2); break;
+      case 'relight': A.hiss(0.6, 1500, 0.15, 0, 1.5); break;
+      case 'gasp': A.hiss(0.5, 900, 0.3, 0, 1.8); break;
+      case 'wake': A.tone(196 * PENTA[(e.a / 60) % 6 | 0], 1.2, 'sine', 0.1, 1, at.pan); break;
+      case 'ending': (e.a === 1 ? [1, 1.25, 1.5, 2, 2.5] : [1, 1.2, 1.5]).forEach((r, i) => A.tone(130.8 * r, 4, 'sine', 0.1, 1, (i - 2) * 0.3, i * 0.4)); break;
       default: break;
     }
   };

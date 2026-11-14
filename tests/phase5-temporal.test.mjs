@@ -48,7 +48,7 @@ test('camera motion: p95 switch rate is recorded; a disocclusion rejects history
   const s = specimen('high', 10), rates = []; let rejected = 0;
   for (let f = 0; f < 60; f++) { s.tick(packInput(IN.TURNR | (f > 30 ? IN.FWD : 0))); s.frame(1 / 60); rates.push(s.pl.sel.stats.switchRate); rejected += s.pl.sel.stats.rejected; }
   t.diagnostic(`turning/walking: switch rate p50 ${(quantile(rates, 0.5) * 100).toFixed(1)}%, p95 ${(quantile(rates, 0.95) * 100).toFixed(1)}%; history rejections ${rejected}`);
-  assert.ok(quantile(rates, 0.95) < 0.6); assert.ok(rejected > 0, 'newly exposed surfaces reject history');
+  assert.ok(quantile(rates, 0.95) < 0.2, 'carried variety identity keeps moving surfaces stable'); assert.ok(rejected > 0, 'newly exposed surfaces reject history');
   // teleport the creature: every leaf that now shows background where the creature was must not reuse creature history
   const sel = s.pl.sel, spider = s.sim.ents.at(-1); s.frame(1 / 60); s.frame(1 / 60); const calm = sel.stats.rejected; spider.x -= 2500; spider.z += 1500; s.frame(1 / 60);
   t.diagnostic(`history rejections: ${calm} in a still frame, ${sel.stats.rejected} in the frame the creature jumps`);

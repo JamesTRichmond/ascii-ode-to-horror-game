@@ -16,7 +16,7 @@ import { createAudio } from './audio.js';
 import { loadSave, storeSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 const U = CELL / 1024, $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
 const G = { mode: 'boot', chapter: 0, sim: null, prev: null, acc: 0, last: 0, pl: null, out: null, atlas: null, noise: null, atlasImage: null, atlasPx: null, save: loadSave(), log: [], seed: +(params.get('seed') || 100), bot: null, frames: [], switchRates: [], hud: createHud(), audio: createAudio(), input: null, bob: 0, hurtFlash: 0, cpu: null };
 const S = () => G.save.settings;
@@ -32,7 +32,7 @@ function applySettings() {
   root.style.setProperty('--scale', s.textScale); root.classList.toggle('contrast', !!s.contrast); root.classList.toggle('still', !!s.reducedMotion);
   G.audio.setVolume(s.volume); if (G.input) G.input.sensitivity = s.sensitivity; $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (!G.pl || G.pl.quality !== s.quality) { G.pl = createPipeline(G.atlas, G.noise, s.quality); if (G.sim) setScene(G.pl, G.sim); const d = $('debug'); d.width = G.pl.w; d.height = G.pl.h; }
-  G.pl.opts.reducedMotion = !!s.reducedMotion; storeSave(G.save);
+  G.pl.opts.reducedMotion = !!s.reducedMotion; G.hud.still = !!s.reducedMotion; storeSave(G.save);
 }
 function resize() { const c = $('view'), dpr = Math.min(2, devicePixelRatio || 1), w = Math.min(1920, Math.round(c.clientWidth * dpr)) || 1440; c.width = w; c.height = Math.round((w * 9) / 16); }
 
@@ -94,7 +94,7 @@ function present(e) {
     case 'measure': burst(pl, x, 1.2, z, 40, 3.5, CY, 1.1); hud.alert(`A MEASURE RETURNS · ${e.a}/${def.need}`); hud.caption(STANZAS[def.id - 1].slice(2 + e.a * 2 - 2, 2 + e.a * 2 + 2).slice(0, 2)); break;
     case 'hum': burst(pl, x + Math.cos(pl.cam.yaw) * 0.8, 1.2, z + Math.sin(pl.cam.yaw) * 0.8, 5, 1.6, CY, 0.9, pl.cam.yaw); break;
     case 'chord': pl.flash = 1; burst(pl, x + Math.cos(pl.cam.yaw), 1.3, z + Math.sin(pl.cam.yaw), 70, 9, CY, 0.8, pl.cam.yaw); break;
-    case 'hurt': G.hurtFlash = 1; burst(pl, x, 1.2, z, 14, 2, RED, 0.5); hud.alert('YOU ARE BEING UNWRITTEN', 1.2); break;
+    case 'hurt': G.hurtFlash = 1; hud.pain(); burst(pl, x, 1.2, z, 14, 2, RED, 0.5); hud.alert('YOU ARE BEING UNWRITTEN', 1.2); break;
     case 'unwritten': burst(pl, x, 1.2, z, 90, 3, PALE, 1.4); hud.alert('UNWRITTEN', 1.2); break;
     case 'stagger': burst(pl, x, 1.4, z, 22, 2.5, PALE, 0.7); break;
     case 'gate': hud.alert('THE WAY OPENS', 3); hud.caption(STANZAS[def.id - 1].slice(6)); break;

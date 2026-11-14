@@ -44,6 +44,13 @@ export function createPipeline(atlas, noise, quality = 'high') {
 
 export function setScene(pl, sim) {
   pl.world = buildWorld(sim); pl.cascades = createCascades(sim.w * TEXELS_PER_CELL, sim.h * TEXELS_PER_CELL);
+  // static atmosphere: low mist banks over water, settling dust indoors (fog bodies in the heterogeneous field)
+  const mist = []; let k = 0;
+  for (let z = 1; z < sim.h - 1; z += 3) for (let x = 1; x < sim.w - 1; x += 4) {
+    const t = sim.tiles[z * sim.w + x], water = t === 126 || t === 61, open = !sim.def.indoor || t === 46;
+    if ((water || (sim.def.indoor && open)) && (k++ % (water ? 2 : 3)) === 0 && mist.length < 60) mist.push((x + 0.5) * 2, water ? 0.25 : 0.6, (z + 0.5) * 2, water ? 4.5 : 3.5, water ? 0.07 : 0.035);
+  }
+  pl.mist = mist;
   pl.shadow = new Uint8Array(pl.cascades.tw * pl.cascades.th).fill(1); pl.instances.clear(); pl.trails.clear(); pl.firstFrame = true; pl.world.dirty = true;
   pl.sel.prev.slotOf.fill(-1); pl.sel.cur.slotOf.fill(-1);
 }
@@ -98,7 +105,7 @@ export function renderFrame(pl, view, dt) {
   const lantern = { intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
   const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure, stars: th.stars, dt };
   shade(gb, cam, env); const t2 = now(); ms.light = t2 - t1;
-  fog.sigma = th.fog * pl.opts.fogScale * apart; fog.height = th.fogH; fog.ambient = th.fogAmb.map(v => v * (1 + surge * 3)); fog.blobs = blobs.length ? blobs : null;
+  fog.sigma = th.fog * pl.opts.fogScale * apart; fog.height = th.fogH; fog.ambient = th.fogAmb.map(v => v * (1 + surge * 3)); fog.blobs = pl.mist && pl.mist.length ? pl.mist.concat(blobs) : blobs.length ? blobs : null;
   integrateFog(fog, gb, cam, env, pl.noise); compositeFog(fog, gb); const t3 = now(); ms.fog = t3 - t2;
   // ---- adaptive leaves, flow, glyphs ----
   subdivide(pl.qt, gb); const t4 = now(); ms.tree = t4 - t3;

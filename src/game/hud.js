@@ -15,6 +15,7 @@ export function createHud() {
   hud.show = on => { $('hud').hidden = !on; };
   hud.setChapter = (def, total) => { $('chapterKicker').textContent = `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
   hud.caption = (lines, seconds = 3.2) => { for (const l of [].concat(lines)) hud.captionQueue.push([l, seconds]); };
+  hud.pain = () => { hud.hurt = 0.8; };
   hud.alert = (text, seconds = 2.4) => { $('alert').textContent = text; hud.alertTimer = seconds; };
 
   hud.update = (sim, dt, captions = true) => {
@@ -41,6 +42,18 @@ export function createHud() {
       const sl = best.type === ET.SLUMBERER; set($('threatLabel'), 'thl', best.type + ':' + best.mode + (sl ? c.sing : ''), el => { el.textContent = sl ? 'THE SLUMBERER · WAKING' : NAMES[best.type] + (best.mode === 8 ? ' · STAGGERED' : best.mode === 1 ? ' · HUNTING' : ' · NEAR'); });
       bar('threatBar', sl ? (c.sing / TUNE.slumberHum) * 100 : Math.max(0, 100 - (bd / (12 * 1024)) * 100));
     }
+    // resonance: while humming, the voice finds the nearest unclaimed measure, unlit brazier or open gate
+    let res = '';
+    if (p.hum) {
+      let tx = 0, tz = 0, bd2 = Infinity;
+      const consider = (x, z) => { const d2 = (x - p.x) ** 2 + (z - p.z) ** 2; if (d2 < bd2) { bd2 = d2; tx = x; tz = z; } };
+      for (const m of sim.picks) if (!m.taken) consider(m.x, m.z);
+      for (let i = 0; i < sim.tiles.length; i++) { const t = sim.tiles[i]; if ((t === 66 && !sim.dyn[i] && def.rule & 16) || (t === 88 && c.gateOpen)) consider((i % sim.w) * 1024 + 512, ((i / sim.w) | 0) * 1024 + 512); }
+      if (bd2 < Infinity) { const bearing = Math.atan2(tz - p.z, tx - p.x) - (p.ang / 4096) * Math.PI * 2, rel = Math.round((((bearing / (Math.PI * 2)) % 1) + 1) % 1 * 8) % 8; res = `♪ ${['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'][rel]} ${Math.round((Math.sqrt(bd2) / 1024) * 2)} m`; }
+    }
+    set($('resonance'), 'res', res, (el, v) => { el.textContent = v; });
+    const hurt = Math.max(hud.hurt = Math.max(0, (hud.hurt || 0) - dt * 1.6), p.hp < 35 ? 0.35 + (hud.still ? 0 : 0.15 * Math.sin(performance.now() / 260)) : 0);
+    set($('vignette'), 'vig', hurt.toFixed(2), (el, v) => { el.style.opacity = v; });
     if (hud.alertTimer > 0 && (hud.alertTimer -= dt) <= 0) $('alert').textContent = '';
     if (hud.captionTimer > 0) { if ((hud.captionTimer -= dt) <= 0) $('caption').textContent = ''; }
     else if (hud.captionQueue.length && captions) { const [text, secs] = hud.captionQueue.shift(); $('caption').textContent = text; hud.captionTimer = secs; }
