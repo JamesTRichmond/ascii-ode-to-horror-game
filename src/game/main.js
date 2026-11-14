@@ -2,7 +2,7 @@
 // The simulation advances in whole 60 Hz ticks from a tick-indexed input log; rendering
 // interpolates between the last two snapshots and never feeds back into the simulation.
 import { parseAtlas } from '../render/atlas.js';
-import { createPipeline, setScene, renderFrame, burst, QUALITY } from '../render/pipeline.js';
+import { createPipeline, setScene, adoptScene, renderFrame, burst, QUALITY } from '../render/pipeline.js';
 import { createGLOutput } from '../render/output_gl.js';
 import { compositeCPU, debugImage } from '../render/output_cpu.js';
 import { CELL } from '../render/gbuffer.js';
@@ -38,8 +38,9 @@ function applySettings() {
 }
 function setTier(tier) {
   if (G.pl && G.pl.quality === tier) return;
-  const opts = G.pl?.opts; G.pl = createPipeline(G.atlas, G.noise, tier); if (opts) Object.assign(G.pl.opts, opts);
-  if (G.sim) setScene(G.pl, G.sim); const d = $('debug'); d.width = G.pl.w; d.height = G.pl.h;
+  const prev = G.pl; G.pl = createPipeline(G.atlas, G.noise, tier);
+  if (prev && prev.world && G.sim) adoptScene(G.pl, prev); else { if (prev) Object.assign(G.pl.opts, prev.opts); if (G.sim) setScene(G.pl, G.sim); }
+  const d = $('debug'); d.width = G.pl.w; d.height = G.pl.h;
   if (G.cpu) { const c = $('view'); c.width = G.pl.w * 2; c.height = G.pl.h * 2; G.cpu.img = G.cpu.ctx.createImageData(c.width, c.height); }
 }
 function resize() { const c = $('view'), dpr = Math.min(2, devicePixelRatio || 1), w = Math.min(1920, Math.round(c.clientWidth * dpr)) || 1440; c.width = w; c.height = Math.round((w * 9) / 16); }
