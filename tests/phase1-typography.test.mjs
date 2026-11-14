@@ -98,6 +98,10 @@ test('material dictionaries: every dictionary character is baked and tagged', ()
   for (const m of MATERIALS) assert.ok(m.id === 0 || atlas.dict[m.id].length >= 6, `${m.name} has ${atlas.dict[m.id].length} candidates`);
   for (const m of MATERIALS) assert.ok(atlas.dict[m.id].length <= 256, 'candidate budget 64-256 per material');
 });
+test('pale and bone surfaces draw only from the pale alphabet', () => {
+  const { atlas } = assets(), pale = new Set(Array.from(DICT_CHARS.PALE).map(c => c.codePointAt(0)));
+  for (const m of [3, 11]) for (const g of atlas.dict[m]) assert.ok(pale.has(atlas.codepoint[g]), `${MATERIALS[m].name} offers '${String.fromCodePoint(atlas.codepoint[g])}'`);
+});
 test('stone / grass / spell scene uses the right dictionary with no material-boundary leakage', t => {
   const { pl, atlas } = specimen('high', 3), sel = pl.sel, used = {};
   for (let n = 0; n < sel.stats.emitted; n++) {

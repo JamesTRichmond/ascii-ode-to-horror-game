@@ -7,6 +7,9 @@ import { specimen, assets } from './helpers.mjs';
 import { createCascades, solveCascades, addEmitter, LEVELS } from '../src/render/cascades.js';
 import { marchTransmittance, fogDensity, createFog, integrateFog, directionalShadow, probeIrradiance } from '../src/render/light.js';
 import { createGBuffer, makeCamera, setCamera, traceWorld, FAR } from '../src/render/gbuffer.js';
+import { createPipeline, setScene, renderFrame } from '../src/render/pipeline.js';
+import { createSim, inShade, solidAt } from '../src/sim/sim.js';
+import { viewOf } from '../src/game/view.js';
 
 test('homogeneous slab matches exp(-sigma d) at 10, 100 and 1,000 steps', () => {
   const sigma = 0.15, d = 7, analytic = Math.exp(-sigma * d);
@@ -79,4 +82,10 @@ test('probe irradiance is directional and skips in-wall probes', () => {
 test('directional shadow: a tall cell shadows the ground behind it', () => {
   const w = 10, h = 10, W = { w, h, floorH: new Float32Array(w * h) }; W.floorH[5 * w + 5] = 5; const out = directionalShadow(W, [0.7, 0.5, 0], new Uint8Array(w * h * 16));
   assert.equal(out[(5 * 4 + 2) * 40 + 4 * 4 + 1], 0, 'cell west of the wall is shadowed from an eastern light'); assert.equal(out[(5 * 4 + 2) * 40 + 6 * 4 + 2], 1); assert.equal(out[(2 * 4) * 40 + 8], 1);
+});
+test('chapter 8: the shade drawn on the ground is exactly the shelter the dawn rule grants', t => {
+  const { atlas, noise } = assets(), sim = createSim(7, 107), pl = createPipeline(atlas, noise, 'low'); setScene(pl, sim); renderFrame(pl, viewOf(sim, sim, 1), 1 / 30);
+  const T = 4, tw = sim.w * T; let cells = 0, shaded = 0, mismatch = 0;
+  for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) { if (solidAt(sim, x, z)) continue; cells++; const drawn = pl.shadow[(z * T + 2) * tw + x * T + 2] === 0, rule = inShade(sim, x, z); if (drawn) shaded++; if (drawn !== rule) mismatch++; }
+  t.diagnostic(`${cells} open cells, ${shaded} drawn in shade, ${mismatch} disagreements`); assert.equal(mismatch, 0); assert.ok(shaded > 20);
 });

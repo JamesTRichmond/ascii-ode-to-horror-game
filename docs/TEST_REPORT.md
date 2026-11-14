@@ -29,7 +29,7 @@ Command: `npm test` → **76 tests, 76 pass, 0 fail.**
 | | 6/12/24-D benchmark | Self-match 0.966 / 0.978 / 0.989; 2.56 / 2.08 / 2.91 µs per leaf | |
 | | Thin legs connected; no 180° seams; vs Sobel-only | Pass — 0 seams; roughness 7.52e-4 → 7.38e-4 | |
 | | Jacobian clamp, bounded glyph size | Pass — axis ratio 0.46–3.11 | |
-| | Offline optimisation: discrete vs relaxed, deterministic | Pass — coverage RMS 0.0538 → 0.0150, identical replay hash | |
+| | Offline differentiable asset optimisation (guide task 3-3) | **Not implemented.** `src/render/optimize.js` is a relaxation diagnostic only: the export is the per-leaf arg-min at every temperature (coverage gap 0.0538 → 0.0150 measures collapse onto that export, not an improvement) | |
 | 05 Temporal | 1 s decay at 30 vs 120 Hz | Pass — identical to 1e-12 | `phase5-temporal` |
 | | .01 does not cross .025; .10 does | Pass | |
 | | Static scenes stabilise | Pass — p95 glyph change 0.96 % with history, 1.67 % without | |

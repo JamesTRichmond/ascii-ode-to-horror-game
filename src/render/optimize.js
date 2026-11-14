@@ -1,8 +1,9 @@
-// Offline hero-asset optimisation (guide phase 4, task 3-3), implemented as a deterministic
-// annealed soft assignment in descriptor space: each leaf holds a relaxed distribution over its
-// material dictionary (softmax of -error / temperature); the temperature is annealed and the
-// discrete export is the arg-max. This is NOT gradient descent through a differentiable
-// rasteriser; it is the discrete/relaxed comparison the guide's acceptance asks for.
+// Relaxation DIAGNOSTIC for guide task 3-3. It does not optimise assets.
+// For every leaf the exported glyph is the shape-only arg-min, identical at every temperature, so the
+// relaxed weights never change the assignment. What it reports is how the annealed softmax distribution
+// over the leaf's dictionary collapses onto that export: entropy, and the gap between the export and the
+// distribution's expected coverage and descriptor. Guide task 3-3 itself — optimising hero assets offline
+// through a differentiable rasteriser against the source image — is NOT implemented.
 import { MATERIALS } from '../shared/materials.js';
 import { shapeError } from './select.js';
 import { fnv1a } from '../sim/fixed.js';

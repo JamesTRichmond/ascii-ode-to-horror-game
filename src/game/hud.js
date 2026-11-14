@@ -24,7 +24,9 @@ export function createHud() {
     bar('brBar', (p.breath / TUNE.breathMax) * 100); set($('brText'), 'br', Math.round(p.breath / 10), (el, v) => { el.textContent = v; });
     const need = def.rule & 16 ? sim.braziers : def.need, have = def.rule & 16 ? c.lit : p.measures;
     set($('measures'), 'meas', have + '/' + need, el => { el.textContent = need ? '◆'.repeat(Math.min(have, need)) + '◇'.repeat(Math.max(0, need - have)) : '—'; el.setAttribute('aria-label', need ? `${have} of ${need} ${def.rule & 16 ? 'braziers lit' : 'measures found'}` : 'none required'); });
-    set($('objective'), 'obj', c.gateOpen + '|' + have, el => { el.textContent = c.gateOpen ? 'The way is open. Find the gate.' : def.hint; });
+    // chapters whose exit is open from the first tick (8, 9) keep their own instructions on screen
+    const openFromStart = def.need === 0 && !(def.rule & 16);
+    set($('objective'), 'obj', c.gateOpen + '|' + have, el => { el.textContent = c.gateOpen && !openFromStart ? 'The way is open. Find the gate.' : def.hint; });
     const voiced = p.breath > 0 || p.measures > 0 || !(def.rule & 1);
     const cls = (id, ready, active) => set($(id), id, (ready ? 'r' : '') + (active ? 'a' : ''), el => { el.className = 'skill' + (ready ? ' ready' : '') + (active ? ' active' : ''); });
     cls('skHum', voiced && p.breath > 0 && !p.gasp, !!p.hum); cls('skChord', voiced && p.cooldown === 0 && p.breath >= TUNE.chordCost && !p.gasp, p.cooldown > TUNE.chordCooldown - 12); cls('skHold', p.breath > 0 && !p.gasp, !!p.hold); cls('skUse', !!(def.rule & 16), false);
