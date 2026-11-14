@@ -50,7 +50,7 @@ function pause() {
 const pause0 = () => { G.mode = 'play'; pause(); };
 function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; G.input.reset(); G.last = 0; }
 function title() {
-  G.mode = 'title'; G.input.enabled = false; G.hud.show(false); const cp = G.save.checkpoint;
+  G.mode = 'title'; G.input.enabled = false; G.hud.show(false); G.audio.silence?.(); const cp = G.save.checkpoint;
   G.hud.menu('ODE', `<p class="stanza">We are the music makers,\nAnd we are the dreamers of dreams…</p><p>A horror in nine stanzas, after Arthur O'Shaughnessy. Rendered entirely in glyphs.</p>`, [
     { label: 'Begin', primary: !cp, action: () => startChapter(0) },
     { label: 'Continue', primary: !!cp, disabled: !cp, action: () => { try { startChapter(cp.chapter, deserialize(Int32Array.from(cp.state))); } catch { startChapter(cp.chapter); } } },
@@ -137,7 +137,7 @@ function frame(t) {
   if (G.out) G.out.draw(G.pl.sel.inst, G.pl.sel.count, G.pl.w, G.pl.h, bg);
   else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx); c.ctx.putImageData(c.img, 0, 0); }
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
-  G.hud.update(G.sim, elapsed, S().captions); G.audio.update(G.sim, G.pl, elapsed);
+  G.hud.update(G.sim, elapsed, S().captions); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
   // rolling statistics
   const total = performance.now() - simT0; G.frames.push(total); if (G.frames.length > 240) G.frames.shift(); G.switchRates.push(G.pl.sel.stats.switchRate); if (G.switchRates.length > 240) G.switchRates.shift();
   if (S().stats && (t | 0) % 6 === 0) { const f = [...G.frames].sort((a, b) => a - b), sw = [...G.switchRates].sort((a, b) => a - b), ms = G.pl.stats.ms, q = (a, p) => a[Math.min(a.length - 1, Math.floor(a.length * p))] || 0;
