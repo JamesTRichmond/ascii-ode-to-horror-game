@@ -21,8 +21,8 @@ for (let c = 0; c < CHAPTERS.length; c++) {
   test(`chapter ${c + 1} "${CHAPTERS[c].title}" is completable and its run replays exactly`, t => {
     const { sim, log } = playthrough(c, 100 + c);
     t.diagnostic(`${sim.c.done ? 'completed' : sim.c.dead ? 'DIED' : 'TIMED OUT'} in ${(sim.tick / TICK_HZ).toFixed(1)} s, hp ${sim.p.hp}, measures ${sim.p.measures}/${CHAPTERS[c].need}, hash ${hashState(sim).toString(16)}`);
-    assert.equal(sim.c.dead, 0, 'the autoplayer survives'); assert.equal(sim.c.done, 1, 'the autoplayer reaches the exit');
-    const replay = createSim(c, 100 + c); for (const w of log) step(replay, w); assert.equal(hashState(replay), hashState(sim), 'input log replays to the same state');
+    assert.equal(sim.c.dead, 0, 'the autoplayer survives'); assert.equal(sim.c.done, 1, 'the autoplayer reaches the exit'); assert.ok(sim.p.measures >= CHAPTERS[c].need, 'the gate opened on its condition');
+    const replay = createSim(c, 100 + c), mute = CHAPTERS[c].rule & RULE.MUTE_START; for (const w of log) { step(replay, w); if (mute && replay.p.measures === 0) assert.equal(replay.p.breath, 0, 'mute until the first measure'); } assert.equal(hashState(replay), hashState(sim), 'input log replays to the same state');
   });
 }
 test('chapter 9 has two endings: sing (1) and silence (2)', () => {
