@@ -1,5 +1,18 @@
 # Changelog
 
+## Review fixes (PR 3, Copilot) — carried into 1.0.0-rc.1
+
+### Fixed
+- Chapter 5 softlock: guttering the flame before lighting any brazier left no way to relight it. The start cell is now a hearth.
+- The sung ending (ending 1) was never shown or saved: the simulation now emits the completion event for it.
+- Chapter 8: drawn shade now matches the shelter rule exactly (101 cells looked safe but were not).
+- Chapters 8 and 9 keep their instructions on screen instead of "The way is open".
+- Pale surfaces no longer draw organic glyphs; unlit inscription bands render as stone.
+- Tests: signed seam count with an oriented fixture, limb-edge coverage, Chapter 1 mute-start assertions, hearth and ending regression tests.
+
+### Corrected claims
+- Guide task 3-3 (offline differentiable optimisation) is not implemented; `optimize.js` is a diagnostic.
+
 ## 1.0.0-rc.1 — Phase 4 (Testing & Polish)
 
 ### Added
