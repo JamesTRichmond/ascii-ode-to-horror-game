@@ -1,0 +1,52 @@
+{
+  "format": "nocturne-atlas",
+  "version": 3,
+  "font": "DejaVuSansMono.ttf",
+  "fontLicense": "assets/atlas/FONT-LICENSE.txt",
+  "tile": {
+    "width": 32,
+    "height": 48,
+    "padding": 4,
+    "innerWidth": 24,
+    "innerHeight": 40
+  },
+  "distanceRangeTexels": 6,
+  "atlas": {
+    "file": "atlas.png",
+    "width": 1024,
+    "height": 720,
+    "cols": 32,
+    "rows": 15,
+    "colorSpace": "data-linear",
+    "sha256": "e136c980f06edfbb441b523a012f631b7dedf910698ba2664781c155f8f15e0f"
+  },
+  "glyphs": {
+    "file": "glyphs.bin",
+    "count": 460,
+    "recordBytes": 48,
+    "headerBytes": 48,
+    "descriptorDims": [
+      6,
+      12,
+      24
+    ],
+    "sha256": "9d0ba5a35c1c0566633277e642c93fc4f850bb38e1ad4ec90061d82282d0abbc"
+  },
+  "blueNoise": {
+    "file": "bluenoise.bin",
+    "size": 32,
+    "sha256": "aac1771281df5cdca9416d5c4c21b02c37ae056cd5e4eb735aadb3f4bcf8f145"
+  },
+  "counts": {
+    "font": 102,
+    "procedural": 358,
+    "braille": 256,
+    "sextant": 64
+  },
+  "bake": {
+    "repairedPixels": 15986,
+    "maxCoverageError": 0.3471,
+    "worstGlyph": "B",
+    "clippedGlyphs": []
+  }
+}
