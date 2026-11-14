@@ -13,8 +13,8 @@ export const ET = { FORSAKER: 1, CROWNED: 2, TRAMPLER: 3, SIGH: 4, MIRTH: 5, TRI
 const SPAWN = { f: ET.FORSAKER, c: ET.CROWNED, s: ET.SIGH, m: ET.MIRTH, 3: ET.TRIUNE, h: ET.HUSK, u: ET.BUILDER, n: ET.MARCHER, o: ET.CHORISTER, k: ET.COMER, Z: ET.SLUMBERER };
 //                 speed/tick, contact damage, hp, hearing % of noise radius
 const STATS = {
-  [ET.FORSAKER]: [11, 14, 2, 100], [ET.CROWNED]: [19, 22, 0, 0], [ET.TRAMPLER]: [34, 30, 0, 0], [ET.SIGH]: [8, 0, 1, 0],
-  [ET.MIRTH]: [30, 12, 1, 0], [ET.TRIUNE]: [31, 45, 0, 100], [ET.HUSK]: [14, 12, 1, 100], [ET.BUILDER]: [17, 20, 0, 130],
+  [ET.FORSAKER]: [11, 14, 2, 100], [ET.CROWNED]: [19, 22, 0, 0], [ET.TRAMPLER]: [22, 30, 0, 0], [ET.SIGH]: [8, 0, 1, 0],
+  [ET.MIRTH]: [30, 12, 1, 0], [ET.TRIUNE]: [24, 34, 0, 100], [ET.HUSK]: [14, 12, 1, 100], [ET.BUILDER]: [17, 20, 0, 130],
   [ET.MARCHER]: [15, 10, 0, 0], [ET.CHORISTER]: [22, 25, 0, 0], [ET.COMER]: [10, 30, 0, 120], [ET.SLUMBERER]: [0, 0, 0, 0],
 };
 export const TUNE = {
@@ -281,7 +281,8 @@ function stepEntity(s, e) {
     default: break;
   }
   const solidNow = !((e.type === ET.CHORISTER || e.type === ET.MIRTH) && c.phase !== 1);
-  if (dmg > 0 && solidNow && d < 640 && (e.type !== ET.MARCHER || p.marked > 0)) hurt(s, dmg, e.x, e.z);
+  const awake = e.type !== ET.HUSK || e.mode === 1;
+  if (dmg > 0 && solidNow && awake && d < 640 && (e.type !== ET.MARCHER || p.marked > 0)) hurt(s, dmg, e.x, e.z);
 }
 
 /** Advance one tick. `input` is a packed integer from packInput(). */

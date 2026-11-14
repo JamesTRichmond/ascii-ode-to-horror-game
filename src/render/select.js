@@ -69,6 +69,8 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
     } else if (level === MAX_LEVEL && cnt <= 3 && oImp >= 0.8 && d > 4) { // thin distant silhouettes: exact sextant sub-cells
       glyph = atlas.sextant[mask & 63]; st.sextant++; r *= 0.55; g *= 0.55; b *= 0.55;
     } else {
+      let vmin = 9, vmax = 0; for (let k = 0; k < dims; k++) { if (mask & (1 << k)) { if (V[k] < vmin) vmin = V[k]; if (V[k] > vmax) vmax = V[k]; } }
+      const contrast = cnt === dims ? (vmax - vmin) / (vmax + vmin + 0.02) : 1, shapeW = mt.wShape * Math.min(1, 0.12 + contrast * 3); // shape matching only where there is shape
       const mean = normalizeDescriptor(V, 0, dims), cand = atlas.dict[oMat], table = atlas.desc[dims], cell = Math.min(sel.gh - 1, (sy / CELL_H) | 0) * gw + Math.min(gw - 1, sx >> 1);
       octDecode(normal, ci * 2, N); unproject(cam, sx, sy, d, P);
       // --- reprojection + history validation ---
@@ -98,7 +100,7 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
       const hid = oKey >> 8 ? (cellX * 7919 + cellY * 104729) | 0 : (Math.floor(P[0] * 3) * 73856093) ^ (Math.floor(P[1] * 3) * 19349663) ^ (Math.floor(P[2] * 3) * 83492791);
       let best = 1e9, prevErr = 1e9;
       for (let c = 0; c < cand.length; c++) {
-        const gi = cand[c], dm = atlas.mean[gi] - target; let e = mt.wShape * shapeError(V, table, gi, dims) + 4 * dm * dm;
+        const gi = cand[c], dm = atlas.mean[gi] - target; let e = shapeW * shapeError(V, table, gi, dims) + 4 * dm * dm;
         if (mt.wOrient < 0.5) { const cs = Math.cos(atlas.angle[gi] - tAng); e += mt.wOrient * 0.3 * atlas.aniso[gi] * coh * (1 - cs * cs); } else e -= 0.15 * bias * atlas.aniso[gi];
         e += hash2(hid, gi) * mt.jitter * 0.22; if (gi === lastGlyph && mt.jitter > 0.3) e += 0.12;
         if (e < best) { best = e; glyph = gi; } if (gi === prevGlyph) prevErr = e;

@@ -10,7 +10,7 @@ export const DICT = {
 /** Characters per dictionary. Order is irrelevant; membership is what is baked. */
 export const DICT_CHARS = {
   GENERIC: " .,:;-=+*!|/\\()[]{}<>ivxcronsetaukhdbqpygmwVXCOSEAUKHDBQPGMW#%&@$0123456789?^_'\"~`zjflTYLIJNRFZ",
-  STONE: '│─┌┐└┘├┤┬┴┼═║╔╗╚╝╬╱╲#=_[]|-+LTHEFI:.',
+  STONE: '│─┌┐└┘├┤┬┴┼═║╔╗╚╝╬╱╲#=_[]|-+:.',
   ORGANIC: ",~sw/\\c();'`vuyrjt{}!i^\"-.:",
   FOLIAGE: "|/\\',\"`!ilvyY^.:;",
   ARCANE: 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊ+*:·°†‡x',
@@ -20,7 +20,7 @@ export const DICT_CHARS = {
   FOG: '.·:°\'`,',
   EMBER: '•*+°·:.@%░▒▓',
   CLOTH: '|/\\()lIi!{}[];:.,vV',
-  PALE: '.,:;-~=+ocsaeuon0O%#@()',
+  PALE: ".,:;-~=+()/\\|'`^cs{}!il",
   METAL: '+*#=≈◊^vVMWX%@|-/\\<>',
 };
 
@@ -35,7 +35,7 @@ const M = (id, name, dict, albedo, emissive, importance, o = {}) => ({
 export const MATERIALS = [
   M(0, 'void', DICT.FOG | DICT.BRAILLE, [0, 0, 0], [0, 0, 0], 0.45, { wShape: 0.2, cover: 0.5 }),
   M(1, 'fur', DICT.ORGANIC, [0.83, 0.79, 0.73], [0, 0, 0], 1.0, { wShape: 0.35, wOrient: 0.9, jitter: 0.55, scale: 1.28 }),
-  M(2, 'stone', DICT.STONE, [0.51, 0.53, 0.54], [0, 0, 0], 0.55, { wShape: 1.0, wOrient: 0.35 }),
+  M(2, 'stone', DICT.STONE, [0.51, 0.53, 0.54], [0, 0, 0], 0.55, { wShape: 1.0, wOrient: 0.35, jitter: 0.35, cover: 0.55 }),
   M(3, 'pale', DICT.PALE | DICT.ORGANIC, [0.85, 0.83, 0.74], [0, 0, 0], 1.0, { wShape: 0.8, wOrient: 0.5, jitter: 0.2 }),
   M(4, 'cloth', DICT.CLOTH, [0.8, 0.075, 0.08], [0, 0, 0], 0.9, { wShape: 0.6, wOrient: 0.8, jitter: 0.2 }),
   M(5, 'ember', DICT.EMBER, [1, 0.3, 0.1], [1.7, 0.1, 0.03], 1.0, { wShape: 0.2, wOrient: 0, warp: 0 }),

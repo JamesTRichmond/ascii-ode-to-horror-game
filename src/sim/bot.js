@@ -6,12 +6,21 @@ import { RULE } from './chapters.js';
 
 export function createBot(opts = {}) { return { field: null, goal: -1, gx: 0, gz: 0, plan: 0, humTicks: 0, wait: 0, lastX: 0, lastZ: 0, still: 0, shake: 0, fIndex: 0, ending: opts.ending || 2, use: 0 }; }
 const dist = (ax, az, bx, bz) => isqrt((ax - bx) * (ax - bx) + (az - bz) * (az - bz));
+/** Phase walls open on a timer (chapter 3), so for planning they count as passable: the bot waits at them. */
+const openable = (s, x, z) => (s.def.rule & RULE.PHASE_TIMER) && x >= 0 && z >= 0 && x < s.w && z < s.h && (s.tiles[z * s.w + x] === TILE.PA || s.tiles[z * s.w + x] === TILE.PB);
+const passable = (s, x, z) => !solidAt(s, x, z) || openable(s, x, z);
+function planFlood(s, field, cx, cz) {
+  if (!(s.def.rule & RULE.PHASE_TIMER)) return flood(s, field, cx, cz);
+  field.fill(32767); const q = new Int32Array(s.w * s.h); let head = 0, tail = 0; field[cz * s.w + cx] = 0; q[tail++] = cz * s.w + cx;
+  while (head < tail) { const i = q[head++], x = i % s.w, z = (i / s.w) | 0, d = field[i] + 1;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const xx = x + dx, zz = z + dz, j = zz * s.w + xx; if (xx < 0 || zz < 0 || xx >= s.w || zz >= s.h || field[j] <= d || !passable(s, xx, zz)) continue; field[j] = d; q[tail++] = j; } }
+}
 
 function nearest(s, field, cells) { let best = -1, bd = 32767; for (const c of cells) if (field[c] < bd) { bd = field[c]; best = c; } return best; }
 function neighbours(s, cell) { const x = cell % s.w, z = (cell / s.w) | 0, out = []; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!solidAt(s, x + dx, z + dz)) out.push((z + dz) * s.w + x + dx); return out; }
 
 function replan(bot, s) {
-  const p = s.p, rule = s.def.rule, n = s.w * s.h, me = new Int16Array(n); flood(s, me, p.x >> 10, p.z >> 10);
+  const p = s.p, rule = s.def.rule, n = s.w * s.h, me = new Int16Array(n); planFlood(s, me, p.x >> 10, p.z >> 10);
   const targets = []; bot.use = -1;
   for (const m of s.picks) if (!m.taken) targets.push((m.z >> 10) * s.w + (m.x >> 10));
   if (rule & RULE.BRAZIERS) for (let i = 0; i < n; i++) if (s.tiles[i] === TILE.BRAZ && (p.flame ? !s.dyn[i] : s.dyn[i])) for (const c of neighbours(s, i)) { targets.push(c); }
@@ -27,7 +36,7 @@ function replan(bot, s) {
     else bot.wait = 20;
   }
   bot.goal = goal;
-  if (goal >= 0) { bot.field = bot.field && bot.field.length === n ? bot.field : new Int16Array(n); flood(s, bot.field, goal % s.w, (goal / s.w) | 0); }
+  if (goal >= 0) { bot.field = bot.field && bot.field.length === n ? bot.field : new Int16Array(n); planFlood(s, bot.field, goal % s.w, (goal / s.w) | 0); }
 }
 
 /** One input word for the current state. */
@@ -39,7 +48,7 @@ export function botInput(bot, s) {
   if (rule & RULE.FINALE && bot.ending === 1) for (const e of s.ents) if (e.type === ET.SLUMBERER && dist(p.x, p.z, e.x, e.z) < 2100) return packInput(p.breath > 40 ? IN.HUM : 0, 0);
   // threat response
   let nearD = 1e9, nearE = null; for (const e of s.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || e.type === ET.HUSK && e.mode === 0) continue; if (e.type === ET.MARCHER && !p.marked) continue; const d = dist(p.x, p.z, e.x, e.z); if (d < nearD) { nearD = d; nearE = e; } }
-  if (rule & RULE.BREATH_HUNT) { let hunted = false; for (const e of s.ents) { const d = dist(p.x, p.z, e.x, e.z); if ((e.type === ET.TRIUNE && d < 7 * UNIT) || (e.type === ET.HUSK && d < 2600)) hunted = true; } if (hunted && p.breath > 120 && p.gasp === 0) buttons |= IN.HOLD; }
+  if (rule & RULE.BREATH_HUNT) { let hunted = false; for (const e of s.ents) { const d = dist(p.x, p.z, e.x, e.z); if ((e.type === ET.TRIUNE && d < 6 * UNIT && e.mode !== 8) || (e.type === ET.HUSK && e.mode === 0 && d < 2500)) hunted = true; } if (hunted && p.breath > (bot.holding ? 200 : TUNE.chordCost + 80) && p.gasp === 0) { buttons |= IN.HOLD; bot.holding = 1; } else bot.holding = 0; }
   if (nearE && nearD < 1500 && !(rule & RULE.MULTITUDE) && !(buttons & IN.HOLD) && p.cooldown === 0 && p.breath >= TUNE.chordCost) {
     const diff = angDiff(p.ang, iatan2(nearE.z - p.z, nearE.x - p.x));
     if (Math.abs(diff) < 600 || nearD < UNIT) buttons |= IN.CHORD; else return packInput(buttons, Math.max(-300, Math.min(300, diff)));
@@ -54,7 +63,8 @@ export function botInput(bot, s) {
   }
   if (tx === undefined) {
     if (bot.goal < 0 || bot.wait > 0) { if (bot.wait > 0) bot.wait--; return packInput(buttons, 0); }
-    [tx, tz] = nextCell(s, bot.field, cx, cz);
+    let waiting; [tx, tz, waiting] = nextCell(s, bot.field, cx, cz);
+    if (waiting) { const d = dist(p.x, p.z, tx, tz); if (d < 180) return packInput(buttons, 0); }
     if (rule & RULE.BRAZIERS && bot.goal === here) { // face and use the brazier beside the goal cell
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const i = (cz + dz) * s.w + cx + dx; if (s.tiles[i] === TILE.BRAZ) { tx = (cx + dx) * UNIT + 512; tz = (cz + dz) * UNIT + 512; buttons |= IN.USE; } }
     }
@@ -68,7 +78,8 @@ export function botInput(bot, s) {
   return packInput(buttons, turn);
 }
 function nextCell(s, f, cx, cz) {
-  const i = cz * s.w + cx; let best = f[i], bx = cx, bz = cz;
-  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = cx + dx, z = cz + dz; if (x < 0 || z < 0 || x >= s.w || z >= s.h) continue; const v = f[z * s.w + x]; if (v < best) { best = v; bx = x; bz = z; } }
-  return [bx * UNIT + 512, bz * UNIT + 512];
+  const i = cz * s.w + cx; let best = f[i], bx = cx, bz = cz, closed = false;
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = cx + dx, z = cz + dz; if (x < 0 || z < 0 || x >= s.w || z >= s.h) continue; const v = f[z * s.w + x], c = solidAt(s, x, z); if (v < best || (v === best && closed && !c)) { best = v; bx = x; bz = z; closed = c; } }
+  if (closed) return [cx * UNIT + 512, cz * UNIT + 512, true]; // wait for the age to turn
+  return [bx * UNIT + 512, bz * UNIT + 512, false];
 }

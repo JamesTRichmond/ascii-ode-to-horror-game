@@ -44,4 +44,4 @@ Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetri
 
 ## Status
 
-Phase 2 of 6 — Pre-Production: vertical slice (Chapter 1).
+Phase 3a of 6 — Production, feature-complete alpha: all nine chapters, full Nocturne pipeline.
