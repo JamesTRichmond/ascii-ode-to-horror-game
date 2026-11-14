@@ -17,7 +17,7 @@ import { loadSave, storeSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
 import { createAutoQuality, sampleFrame } from './quality.js';
 
-export const VERSION = '1.0.0-rc.1';
+export const VERSION = '1.0.0-rc.2';
 const U = CELL / 1024, $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
 const G = { mode: 'boot', chapter: 0, sim: null, prev: null, acc: 0, last: 0, pl: null, out: null, atlas: null, noise: null, atlasImage: null, atlasPx: null, save: loadSave(), log: [], seed: +(params.get('seed') || 100), bot: null, frames: [], switchRates: [], hud: createHud(), audio: createAudio(), input: null, bob: 0, hurtFlash: 0, cpu: null };
 const S = () => G.save.settings;
@@ -57,6 +57,13 @@ function pause() {
 }
 const pause0 = () => { G.mode = 'play'; pause(); };
 function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; G.input.reset(); G.last = 0; }
+/** Day-one patch readiness: compare the running build with the deployed version.json (same origin, no tracking). */
+async function checkForUpdate() {
+  try {
+    const r = await fetch('version.json', { cache: 'no-store' }); if (!r.ok) return null;
+    const v = await r.json(); G.deployed = v; return v.version !== VERSION ? v.version : null;
+  } catch { return null; }
+}
 function title() {
   G.mode = 'title'; G.input.enabled = false; G.hud.show(false); const cp = G.save.checkpoint;
   G.hud.menu('ODE', `<p class="stanza">We are the music makers,\nAnd we are the dreamers of dreams…</p><p>A horror in nine stanzas, after Arthur O'Shaughnessy. Rendered entirely in glyphs.</p>`, [
@@ -64,6 +71,7 @@ function title() {
     { label: 'Continue', primary: !!cp, disabled: !cp, action: () => { try { startChapter(cp.chapter, deserialize(Int32Array.from(cp.state))); } catch { startChapter(cp.chapter); } } },
     { label: 'Chapters', disabled: G.save.unlocked < 2, action: chapterMenu }, { label: 'How to play', action: helpMenu }, { label: 'Settings', action: () => settingsMenu(title) },
   ], `v${VERSION}`);
+  checkForUpdate().then(newer => { if (newer && G.mode === 'title') { const n = document.createElement('p'); n.setAttribute('role', 'status'); n.textContent = `Version ${newer} is available. Reload the page to update; your progress is kept.`; document.querySelector('#menu .card')?.insertBefore(n, document.querySelector('#menu nav')); } });
 }
 function chapterMenu() { G.hud.menu('CHAPTERS', '', CHAPTERS.map((c, i) => ({ label: `${c.id}. ${c.title}`, disabled: i >= G.save.unlocked, action: () => startChapter(i) })).concat({ label: 'Back', action: title }), 'SELECT A STANZA'); }
 function helpMenu() {
