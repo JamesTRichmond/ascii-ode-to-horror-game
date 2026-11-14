@@ -116,7 +116,7 @@ function present(e) {
     case 'surge': hud.alert('THE DAWN', 1.5); break;
     case 'marked': hud.alert('THEY HAVE SEEN A SCORNER', 2); break;
     case 'brazier': burst(pl, x, 1.4, z, 50, 2.5, GOLDC, 1.3); hud.alert(`FLAME WROUGHT · ${e.a}/${G.sim.braziers}`); break;
-    case 'gutter': hud.alert('YOUR VOICE GUTTERS THE FLAME', 2); break;
+    case 'gutter': hud.alert('YOUR VOICE GUTTERS THE FLAME — RELIGHT WHERE YOU BEGAN', 2.6); break;
     case 'relight': hud.alert('THE FLAME RETURNS', 1.5); break;
     case 'gasp': hud.alert('YOU GASP', 1.2); break;
     case 'wake': burst(pl, x, 0.6, z, 20, 1.5, GOLDC, 1.2); hud.alert('THE SLEEPER STIRS', 1.2); break;
