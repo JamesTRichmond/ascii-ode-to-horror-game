@@ -33,7 +33,7 @@ test('ETF on a rotating field (concentric rings): no 180-degree sign seams, and 
   const rings = (x, y) => 0.5 + 0.4 * Math.sin(Math.hypot(x - 80, y - 60) * 0.55), run = iters => { const s = synthetic(rings); computeFlow(s.fl, s.gb, s.cam, { etfIterations: iters, tensorWeight: 1 }); return s.fl; };
   const measure = fl => { let seams = 0, n = 0, rough = 0, tang = 0; for (let cy = 4; cy < fl.gh - 4; cy++) for (let cx = 4; cx < fl.gw - 4; cx++) {
     const i = cy * fl.gw + cx, rx = cx * CELL_W + 1 - 80, ry = cy * CELL_H + 1 - 60, r = Math.hypot(rx, ry); if (r < 12) continue;
-    const d = Math.abs(fl.fx[i] * fl.fx[i + 1] + fl.fy[i] * fl.fy[i + 1]); if (d < 0.5) seams++; rough += 1 - d; tang += Math.abs((fl.fx[i] * -ry + fl.fy[i] * rx) / r); n++; }
+    const dotX = fl.fx[i] * fl.fx[i + 1] + fl.fy[i] * fl.fy[i + 1], dotY = fl.fx[i] * fl.fx[i + fl.gw] + fl.fy[i] * fl.fy[i + fl.gw], d = Math.abs(dotX); if (dotX < -0.5 || dotY < -0.5) seams++; rough += 1 - d; tang += Math.abs((fl.fx[i] * -ry + fl.fy[i] * rx) / r); n++; }
     return { seams: seams / n, rough: rough / n, tangential: tang / n }; };
   const sobel = measure(run(0)), etf = measure(run(3)); t.diagnostic(`Sobel-only ${JSON.stringify(sobel)} | ETF x3 ${JSON.stringify(etf)}`);
   assert.ok(etf.seams < 0.01, 'unoriented lines never flip against their neighbours'); assert.ok(etf.rough <= sobel.rough + 1e-9, 'ETF does not roughen the field'); assert.ok(etf.tangential > 0.9, 'flow runs along the rings');
