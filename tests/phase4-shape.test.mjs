@@ -64,6 +64,22 @@ test('thin legs stay connected: leg leaves emit glyphs in every micro-cell along
     let near = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) near |= has[(cy + dy) * pl.flow.gw + cx + dx]; if (near) covered++; }
   assert.ok(fur > 800 && covered / fur > 0.97, `${covered}/${fur} fur cells have a glyph within one cell`);
 });
+test('limb edges and tips: partially covered micro-cells keep a creature glyph (low and high tiers)', t => {
+  const rows = [];
+  for (const q of ['low', 'high']) {
+    const { pl } = specimen(q, 3), gb = pl.gb, sel = pl.sel, gw = pl.flow.gw, gh = pl.flow.gh, has = new Uint8Array(gw * gh);
+    for (let n = 0; n < sel.count; n++) if (sel.matOf[n] === 1) has[Math.min(gh - 1, (sel.inst[n * 11 + 1] / CELL_H) | 0) * gw + Math.min(gw - 1, sel.inst[n * 11] >> 1)] = 1;
+    let partial = 0, own = 0, near = 0;
+    for (let cy = 1; cy < gh - 1; cy++) for (let cx = 1; cx < gw - 1; cx++) {
+      let f = 0; for (let y = 0; y < CELL_H; y++) for (let x = 0; x < CELL_W; x++) if (gb.material[(cy * CELL_H + y) * gb.w + cx * CELL_W + x] === 1) f++;
+      if (f === 0 || f === CELL_W * CELL_H) continue; partial++; if (has[cy * gw + cx]) own++;
+      let nb = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) nb |= has[(cy + dy) * gw + cx + dx]; if (nb) near++;
+    }
+    rows.push(`${q}: ${partial} partial cells, own ${(own / partial * 100).toFixed(1)}%, within one ${(near / partial * 100).toFixed(1)}%`);
+    assert.ok(partial > 200, 'the specimen has limb edges'); assert.equal(near, partial, 'no gap along a limb: every partial cell has a creature glyph within one cell'); assert.ok(own / partial > 0.95, 'nearly every partial cell carries its own glyph');
+  }
+  t.diagnostic(rows.join(' | '));
+});
 
 test('Jacobian warp: singular values are clamped at grazing angles; well-conditioned frames are untouched', () => {
   for (let i = 0; i < 500; i++) { const a = i * 0.713, m = [Math.cos(a) * (0.01 + (i % 7) * 0.4), -Math.sin(a) * ((i % 5) * 0.5), Math.sin(a) * (0.01 + (i % 7) * 0.4), Math.cos(a) * ((i % 5) * 0.5)]; clampJacobian(m, 0.45, 1.25); const [s1, s2] = singularValues(m); assert.ok(s1 <= 1.25 + 1e-9 && s2 >= 0.45 - 1e-9 && m.every(Number.isFinite), `sv ${s1}, ${s2}`); }
