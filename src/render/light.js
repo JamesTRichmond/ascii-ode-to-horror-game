@@ -91,8 +91,8 @@ export function shade(gb, cam, env) {
       const rim = Math.max(0, -(N[0] * (cam.fx + cam.rx * a) + N[2] * (cam.fz + cam.rz * a)) + N[1] * vy) * (object[i] ? 0.06 : 0.02);
       let al = ALB[m], em = EMI[m], pulse = m === 13 || m === 6 ? 0.65 + 0.35 * Math.sin(time * 1.7 + (wx + wy + wz) * 2.1) : m === 15 ? 0.7 + 0.3 * Math.sin(time * 9 + wy * 8) : 1;
       if (m === 13) { // inscribed stone: lines of glowing script on dark stone, not a glowing slab
-        const line = wy * 2.4, u = (wx + wz) * 1.6, lit = line - Math.floor(line) < 0.42 && hash2(Math.floor(u), Math.floor(line)) > 0.3 && wy > 0.4 && wy < 3.2;
-        if (!lit) { al = ALB[2]; pulse = 0; } else k = 1;
+        const line = wy * 2.4, u = (wx + wz) * 1.6, inScript = line - Math.floor(line) < 0.42 && hash2(Math.floor(u), Math.floor(line)) > 0.3 && wy > 0.4 && wy < 3.2;
+        if (!inScript) { al = ALB[2]; pulse = 0; material[i] = 2; } else k = 1;
       }
       radiance[o] = (al[0] * k * (amb[0] + LC[0] * lit + E[0] + rim + lan * (env.lantern ? env.lantern.color[0] : 0)) + em[0] * pulse) * exp;
       radiance[o + 1] = (al[1] * k * (amb[1] + LC[1] * lit + E[1] + rim + lan * (env.lantern ? env.lantern.color[1] : 0)) + em[1] * pulse) * exp;

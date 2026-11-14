@@ -42,7 +42,7 @@ export function createSim(chapter, seed = 1) {
     const ch = def.map[z][x] ?? (def.indoor ? '#' : 'r'), i = z * w + x; let t = code(ch);
     const base = def.indoor ? T.FLOOR : (z > 0 && ',~='.includes(def.map[z - 1][x] ?? '') ? T.SAND : T.GRASS);
     const cx = x * UNIT + UNIT / 2, cz = z * UNIT + UNIT / 2;
-    if (ch === 'P') { s.p.x = cx; s.p.z = cz; t = base; }
+    if (ch === 'P') { s.p.x = cx; s.p.z = cz; s.start = { x: cx, z: cz }; t = base; } // start cell: also the hearth that relights the Chapter 5 flame (derived from the map, not serialised)
     else if (ch === 'M') { s.picks.push({ x: cx, z: cz, taken: 0 }); t = base; }
     else if (ch === 'W') { t = T.RAISE; s.dyn[i] = 1; }
     else if (ch === 'T') { s.spawns.push({ x: cx, z: cz }); t = base; }
@@ -169,6 +169,9 @@ function stepPlayer(s, input) {
       if (s.dyn[i]) { if (!p.flame) { p.flame = 1; emit(s, 'relight', p.x, p.z); } }
       else if (p.flame) { s.dyn[i] = 1; c.lit++; emit(s, 'brazier', x * UNIT + 512, z * UNIT + 512, c.lit); }
     }
+    // "A light that doth not depart": where the player began, the flame can always be taken up again,
+    // so guttering it before any brazier is lit can never strand the chapter.
+    if (!p.flame && s.start && dist(p.x, p.z, s.start.x, s.start.z) < 1700) { p.flame = 1; emit(s, 'relight', p.x, p.z); }
   }
   if (rule & RULE.BRAZIERS && p.hum && p.flame && p.humTicks > 45) { p.flame = 0; emit(s, 'gutter', p.x, p.z); }
 }
@@ -201,7 +204,7 @@ function stepRules(s) {
   }
   if (rule & RULE.FINALE) for (const e of s.ents) if (e.type === ET.SLUMBERER && p.hum && dist(p.x, p.z, e.x, e.z) < 2300) {
     c.sing++; if (c.sing % 60 === 0) emit(s, 'wake', e.x, e.z, c.sing);
-    if (c.sing >= TUNE.slumberHum && !c.done) { c.done = 1; c.ending = 1; emit(s, 'ending', e.x, e.z, 1); }
+    if (c.sing >= TUNE.slumberHum && !c.done) { c.done = 1; c.ending = 1; emit(s, 'ending', e.x, e.z, 1); emit(s, 'complete', e.x, e.z, def.id); } // the presenter finishes chapters on 'complete'
   }
   // gate
   if (!c.gateOpen) {
