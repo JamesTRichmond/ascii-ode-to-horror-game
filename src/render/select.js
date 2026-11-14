@@ -104,10 +104,10 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
       let best = 1e9, prevErr = 1e9;
       // score = shape + coverage + orientation + stable variety. Cheap terms first; the shape sum bails out
       // once it cannot beat the best (the incumbent from history is always scored in full for hysteresis).
-      const c2t = Math.cos(2 * tAng), s2t = Math.sin(2 * tAng), wO = mt.wOrient < 0.5 ? mt.wOrient * 0.15 * coh : 0, wJ = mt.jitter * 0.22, half = shapeW * 0.5, an = atlas.aniso, am = atlas.mean, ac2 = atlas.c2, as2 = atlas.s2;
+      const c2t = Math.cos(2 * tAng), s2t = Math.sin(2 * tAng), orientPenalty = mt.wOrient < 0.5, wO = orientPenalty ? mt.wOrient * 0.15 * coh : 0, wJ = mt.jitter * 0.22, half = shapeW * 0.5, an = atlas.aniso, am = atlas.mean, ac2 = atlas.c2, as2 = atlas.s2;
       for (let c = 0; c < cand.length; c++) {
         const gi = cand[c], dm = am[gi] - target; let e = 4 * dm * dm + hash2(hid, gi) * wJ;
-        if (wO) e += wO * an[gi] * (1 - (ac2[gi] * c2t + as2[gi] * s2t)); else e -= 0.15 * bias * an[gi];
+        if (orientPenalty) e += wO * an[gi] * (1 - (ac2[gi] * c2t + as2[gi] * s2t)); else e -= 0.15 * bias * an[gi]; // same branch as before the optimisation
         if (!ok && gi === lastGlyph && mt.jitter > 0.3) e += 0.12;
         const full = gi === prevGlyph, o = gi * dims; let sh = 0;
         for (let k = 0; k < dims; k++) { const d = V[k] - table[o + k]; sh += d * d; if (!full && e + half * sh >= best) break; }
