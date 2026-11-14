@@ -44,6 +44,7 @@ PLAYWRIGHT_PATH=/path/to/node_modules/playwright npm run check:browser
 | [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md) | Launch checklist with status |
 | [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) | Player-facing release notes |
 | [store/STORE_PAGE.md](store/STORE_PAGE.md) | Store copy and engine-rendered art |
+| [docs/LIVE_OPS.md](docs/LIVE_OPS.md) | Telemetry, crash reporting, hotfix pipeline, roadmap |
 
 Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetric Codex, Edition II).
 
@@ -61,4 +62,4 @@ Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetri
 
 ## Status
 
-Phase 5 of 6 — Launch & Release: production build, deployment configuration, release materials. See [docs/DEPLOY.md](docs/DEPLOY.md) and [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md).
+Phase 6 of 6 — Post-launch: Endless Choir expansion, opt-in telemetry, crash replay, hotfix pipeline. See [docs/LIVE_OPS.md](docs/LIVE_OPS.md).

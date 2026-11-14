@@ -4,6 +4,7 @@
 // Starts the static server itself, then reports JSON:
 //   chapters  every chapter loads in play mode with zero console errors; frame p50/p95
 //   ui        title -> begin -> pause (Esc) -> settings -> resume, keyboard focus trap, audio running
+//   liveops   Endless Choir loads; a deliberate fault shows the crash overlay with replay context, sends nothing
 //   hud       no panel overlap and no horizontal scroll at 1280px/100%, 1280px/200%, 320px/100%
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -42,6 +43,12 @@ try {
     await p.click('text=Settings'); await p.selectOption('select[data-k="reducedMotion"]', 'true'); await p.click('text=Done'); await p.click('text=Resume'); await p.waitForTimeout(500);
     const st = await p.evaluate(() => ({ mode: __ode.G.mode, audio: __ode.G.audio.ctx?.state ?? 'none', reducedMotion: __ode.G.pl.opts.reducedMotion }));
     report.ui = { title, paused, focusCycle: tabs, ...st, errors: errs }; await p.close(); }
+  { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
+    await p.goto(`${base}?endless=7&depth=2&autoplay=1&quality=low`); await p.waitForTimeout(3000);
+    const e = await p.evaluate(() => ({ kicker: document.getElementById('chapterKicker').textContent, mode: __ode.G.mode, tick: __ode.G.sim.tick }));
+    await p.evaluate(() => { __ode.G.pl.sel = null; }); await p.waitForTimeout(600); // deliberate render-stage fault
+    const c = await p.evaluate(() => ({ mode: __ode.G.mode, overlay: document.getElementById('menuTitle')?.textContent, crashes: __ode.G.telemetry.crashes.length, sent: __ode.G.telemetry.sent, hasReplayContext: !!(__ode.G.telemetry.crashes[0]?.inputs?.length && __ode.G.telemetry.crashes[0]?.endless) }));
+    report.liveops = { endless: e, crash: c, errors: errs.filter(x => !/sel/.test(x)) }; await p.close(); }
   for (const [w, h, scale] of [[1280, 720, 1], [1280, 720, 2], [320, 640, 1]]) {
     const p = await browser.newPage({ viewport: { width: w, height: h } }), errs = watch(p);
     await p.addInitScript(sc => localStorage.setItem('ode.save.v1', JSON.stringify({ version: 1, settings: { textScale: sc, quality: 'low' } })), scale);
@@ -51,6 +58,6 @@ try {
     report.hud.push({ viewport: `${w}x${h}`, textScale: scale, ...r, errors: errs }); await p.close();
   }
 } finally { await browser.close(); server.kill(); }
-const ok = report.chapters.every(c => c.mode === 'play' && !c.errors.length) && report.ui?.paused === 'PAUSED' && report.ui?.mode === 'play' && !report.ui.errors.length && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length);
+const ok = report.chapters.every(c => c.mode === 'play' && !c.errors.length) && report.ui?.paused === 'PAUSED' && report.ui?.mode === 'play' && !report.ui.errors.length && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length) && report.liveops?.endless.mode === 'play' && report.liveops?.crash.overlay === 'SOMETHING BROKE' && report.liveops.crash.sent === 0 && report.liveops.crash.hasReplayContext;
 if (out) fs.writeFileSync(path.join(out, 'browser-check.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 1)); console.log(ok ? 'BROWSER CHECK PASSED' : 'BROWSER CHECK FAILED'); process.exit(ok ? 0 : 1);

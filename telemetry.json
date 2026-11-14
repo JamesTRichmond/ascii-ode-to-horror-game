@@ -1,0 +1,4 @@
+{
+  "endpoint": null,
+  "note": "Telemetry is disabled in this build. A deployment that wants opt-in diagnostics sets endpoint to a same-origin path (\"/api/telemetry\") or an https URL. Players must still opt in under Settings."
+}
