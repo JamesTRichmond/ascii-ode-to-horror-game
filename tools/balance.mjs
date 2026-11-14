@@ -6,7 +6,9 @@ import { createSim, step, TICK_HZ } from '../src/sim/sim.js';
 import { createBot, botInput } from '../src/sim/bot.js';
 import { CHAPTERS } from '../src/sim/chapters.js';
 
-const seeds = +(process.argv[2] || 12), json = process.argv.includes('--json'), rows = [];
+const args = process.argv.slice(2), json = args.includes('--json'), positional = args.filter(a => !a.startsWith('--'));
+const seeds = positional.length ? Number(positional[0]) : 12, rows = [];
+if (!Number.isInteger(seeds) || seeds < 1) { console.error(`seed count must be a positive integer, got ${positional[0]}`); process.exit(2); }
 for (let c = 0; c < CHAPTERS.length; c++) for (const skill of [1, 0]) {
   let done = 0, died = 0, time = 0, dmg = 0, alerts = 0, hits = 0, gasps = 0;
   for (let k = 1; k <= seeds; k++) {
