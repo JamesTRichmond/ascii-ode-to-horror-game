@@ -204,7 +204,7 @@ function stepRules(s) {
   }
   if (rule & RULE.FINALE) for (const e of s.ents) if (e.type === ET.SLUMBERER && p.hum && dist(p.x, p.z, e.x, e.z) < 2300) {
     c.sing++; if (c.sing % 60 === 0) emit(s, 'wake', e.x, e.z, c.sing);
-    if (c.sing >= TUNE.slumberHum && !c.done) { c.done = 1; c.ending = 1; emit(s, 'ending', e.x, e.z, 1); }
+    if (c.sing >= TUNE.slumberHum && !c.done) { c.done = 1; c.ending = 1; emit(s, 'ending', e.x, e.z, 1); emit(s, 'complete', e.x, e.z, def.id); } // the presenter finishes chapters on 'complete'
   }
   // gate
   if (!c.gateOpen) {

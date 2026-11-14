@@ -34,3 +34,10 @@ test('chapter 5: a guttered flame can be relit where the player began, even with
   assert.equal(sim.p.flame, 0, 'humming gutters the flame'); assert.equal(sim.c.lit, 0, 'no brazier is lit to relight from');
   step(sim, packInput(IN.USE)); assert.equal(sim.p.flame, 1, 'the hearth at the start relights it'); assert.ok(sim.events.some(e => e.type === 'relight'));
 });
+test('both chapter 9 endings emit the completion event the presenter waits for, exactly once', () => {
+  for (const ending of [1, 2]) {
+    const sim = createSim(8, 108), bot = createBot({ ending }), seen = [];
+    while (!sim.c.done && !sim.c.dead && sim.tick < 300 * TICK_HZ) { step(sim, botInput(bot, sim)); for (const e of sim.events) seen.push(e.type); sim.events.length = 0; }
+    assert.equal(sim.c.ending, ending); assert.equal(seen.filter(t => t === 'complete').length, 1, `ending ${ending}: one 'complete'`); assert.equal(seen.filter(t => t === 'ending').length, 1);
+  }
+});
