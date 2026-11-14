@@ -71,7 +71,10 @@ The G-buffer is the only stage that beat its target. Lighting, fog, flow and sel
 under-estimated by 2–2.5×, so the 30 ms total holds at the low tier and not at the high tier on
 this CPU.
 
-Cascade updates are amortised (one cascade level per frame) and are outside the per-frame total.
+Cascades are not amortised. The shipped renderer re-solves all four cascade levels and one damped
+bounce every frame on the main thread. That cost is part of the lighting row above and therefore of
+the per-frame total: 2.8 / 4.6 ms (p50 / p95) at high, 2.7 / 3.7 ms at low, on Chapter 1. Spreading
+levels across frames or moving the solve to a worker remains a possible optimisation.
 
 ## Risks
 
