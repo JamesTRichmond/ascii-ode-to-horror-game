@@ -54,7 +54,9 @@ export function createHud() {
       if (bd2 < Infinity) { const bearing = Math.atan2(tz - p.z, tx - p.x) - (p.ang / 4096) * Math.PI * 2, rel = Math.round((((bearing / (Math.PI * 2)) % 1) + 1) % 1 * 8) % 8; res = `♪ ${['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'][rel]} ${Math.round((Math.sqrt(bd2) / 1024) * 2)} m`; }
     }
     set($('resonance'), 'res', res, (el, v) => { el.textContent = v; });
-    const hurt = Math.max(hud.hurt = Math.max(0, (hud.hurt || 0) - dt * 1.6), p.hp < 35 ? 0.35 + (hud.still ? 0 : 0.15 * Math.sin(performance.now() / 260)) : 0);
+    hud.hurt = Math.max(0, (hud.hurt || 0) - dt * 1.6);
+    const low = p.hp < 35 ? 0.35 + (hud.still ? 0 : 0.15 * Math.sin(performance.now() / 260)) : 0;
+    const hurt = Math.max(hud.still ? (hud.hurt > 0 ? 0.6 : 0) : hud.hurt, low); // reduced motion: on or off, never a fade
     set($('vignette'), 'vig', hurt.toFixed(2), (el, v) => { el.style.opacity = v; });
     if (hud.alertTimer > 0 && (hud.alertTimer -= dt) <= 0) $('alert').textContent = '';
     if (hud.captionTimer > 0) { if ((hud.captionTimer -= dt) <= 0) $('caption').textContent = ''; }
