@@ -9,7 +9,8 @@ import { createSelector, selectGlyphs, appendTrails } from './select.js';
 import { DecayField } from './temporal.js';
 import { getMesh, transformMesh } from './meshes.js';
 import { buildWorld, syncWorld } from './world.js';
-import { ET } from '../sim/sim.js';
+import { ET, inShade, solidAt } from '../sim/sim.js';
+import { RULE } from '../sim/chapters.js';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 const norm3 = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
@@ -40,6 +41,17 @@ export function createPipeline(atlas, noise, quality = 'high') {
     env: null,
   };
   return pl;
+}
+
+/** Dawn chapters: the shadow mask comes from the simulation's own shelter rule (inShade), one value per cell,
+ *  so a player standing in visible shade is always sheltered and vice versa. Solid cells stay lit. */
+export function shelterShadow(sim, out) {
+  const T = TEXELS_PER_CELL, tw = sim.w * T;
+  for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) {
+    const v = !solidAt(sim, x, z) && inShade(sim, x, z) ? 0 : 1;
+    for (let j = 0; j < T; j++) out.fill(v, (z * T + j) * tw + x * T, (z * T + j) * tw + x * T + T);
+  }
+  return out;
 }
 
 export function setScene(pl, sim) {
@@ -93,7 +105,11 @@ export function renderFrame(pl, view, dt) {
   const surge = sim.def.dawn ? (sim.c.stage === 2 ? 1 : sim.c.stage === 1 ? 0.35 : 0.08) : 0;
   const sky = th.skyHorizon.map((v, k) => v * 0.6 + th.ambient[k] + surge * [1.6, 1.0, 0.5][k]);
   solveCascades(c, { sigma: th.fog * tm * pl.opts.fogScale, sky, bounces: pl.opts.bounces, albedo: 0.5, gain: 0.8 });
-  if (world.dirty) { if (th.dirColor[0] > 0) directionalShadow(world, th.dir, pl.shadow); world.dirty = false; }
+  if (world.dirty) {
+    if (sim.def.rule & RULE.DAWN) shelterShadow(sim, pl.shadow); // the shade drawn is exactly the shade that protects
+    else if (th.dirColor[0] > 0) directionalShadow(world, th.dir, pl.shadow);
+    world.dirty = false;
+  }
   const apart = sim.def.glory && sim.c.phase === 1 ? 2.2 : 1, dirK = sim.def.dawn ? 0.25 + surge * 2.2 : 1;
   const lantern = { intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
   const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure, stars: th.stars, dt };
