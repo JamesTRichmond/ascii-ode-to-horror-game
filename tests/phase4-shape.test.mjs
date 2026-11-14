@@ -18,9 +18,11 @@ test('vertical edge -> vertical tangent; antiparallel tangents align; isotropic 
   assert.equal(signAlign(1, 0, -1, 0), -1); assert.equal(signAlign(1, 0, 0.9, 0.1), 1);
   assert.ok(tensorTangent(1, 0, 1, [0, 0, 0])[2] < 1e-5); assert.equal(tensorTangent(0, 0, 0, [0, 0, 0])[2], 0);
 });
-function synthetic(lumFn, w = 160, h = 120) {
+// Synthetic surface facing the camera. tanFn(x, y) gives the authored tangent as a screen direction [sx, sy];
+// with this camera (yaw 0) world tangent (0, -sy, sx) projects to screen (sx, sy). Default: screen +x everywhere.
+function synthetic(lumFn, w = 160, h = 120, tanFn = () => [1, 0]) {
   const gb = createGBuffer(w, h), cam = setCamera(makeCamera(w, h), 0, 1.6, 0, 0); gb.depth.fill(6); gb.material.fill(1);
-  for (let i = 0; i < w * h; i++) { gb.lum[i] = lumFn(i % w, (i / w) | 0); octEncode(1, 0, 0, gb.normal, i * 2); octEncode(0, 0, 1, gb.tangent, i * 2); } // authored tangent projects to screen +x
+  for (let i = 0; i < w * h; i++) { const x = i % w, y = (i / w) | 0, [sx, sy] = tanFn(x, y), l = Math.hypot(sx, sy) || 1; gb.lum[i] = lumFn(x, y); octEncode(1, 0, 0, gb.normal, i * 2); octEncode(0, -sy / l, sx / l, gb.tangent, i * 2); }
   return { gb, cam, fl: createFlow(w, h) };
 }
 test('scene encoder: a vertical luminance edge yields vertical flow at the edge; flat regions fall back to the authored tangent', () => {
@@ -30,7 +32,7 @@ test('scene encoder: a vertical luminance edge yields vertical flow at the edge;
   assert.ok(fl.coh[f] < 0.05, 'flat region has no confidence'); assert.ok(Math.abs(fl.fx[f]) > 0.99 && Math.abs(fl.fy[f]) < 0.05, 'stable authored fallback');
 });
 test('ETF on a rotating field (concentric rings): no 180-degree sign seams, and smoother than Sobel-only', t => {
-  const rings = (x, y) => 0.5 + 0.4 * Math.sin(Math.hypot(x - 80, y - 60) * 0.55), run = iters => { const s = synthetic(rings); computeFlow(s.fl, s.gb, s.cam, { etfIterations: iters, tensorWeight: 1 }); return s.fl; };
+  const rings = (x, y) => 0.5 + 0.4 * Math.sin(Math.hypot(x - 80, y - 60) * 0.55), ccw = (x, y) => [-(y - 60), x - 80], run = iters => { const s = synthetic(rings, 160, 120, ccw); /* authored tangents oriented consistently around the rings, as on a real surface */ computeFlow(s.fl, s.gb, s.cam, { etfIterations: iters, tensorWeight: 1 }); return s.fl; };
   const measure = fl => { let seams = 0, n = 0, rough = 0, tang = 0; for (let cy = 4; cy < fl.gh - 4; cy++) for (let cx = 4; cx < fl.gw - 4; cx++) {
     const i = cy * fl.gw + cx, rx = cx * CELL_W + 1 - 80, ry = cy * CELL_H + 1 - 60, r = Math.hypot(rx, ry); if (r < 12) continue;
     const dotX = fl.fx[i] * fl.fx[i + 1] + fl.fy[i] * fl.fy[i + 1], dotY = fl.fx[i] * fl.fx[i + fl.gw] + fl.fy[i] * fl.fy[i + fl.gw], d = Math.abs(dotX); if (dotX < -0.5 || dotY < -0.5) seams++; rough += 1 - d; tang += Math.abs((fl.fx[i] * -ry + fl.fy[i] * rx) / r); n++; }
