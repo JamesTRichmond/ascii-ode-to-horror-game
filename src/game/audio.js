@@ -71,7 +71,7 @@ export function createAudio() {
     if (!A.ready || !sim) return; const p = sim.p; A.listener = { x: p.x, z: p.z, yaw: (p.ang / 4096) * Math.PI * 2 };
     if (!active) { A.silence(); return; }
     A.hum.g.gain.setTargetAtTime(p.hum ? 0.12 : 0, now(), 0.06); A.hum.o1.detune.setTargetAtTime(p.breath < 200 ? -30 : 0, now(), 0.2);
-    let near = 1e9; for (const e of sim.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || (e.type === ET.MARCHER && !p.marked) || (e.type === ET.HUSK && e.mode === 0)) continue; near = Math.min(near, Math.hypot(e.x - p.x, e.z - p.z) / 1024); }
+    let near = 1e9; for (const e of sim.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || (e.type === ET.MARCHER && !p.marked) || (e.type === ET.HUSK && e.mode === 0) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && sim.c.phase !== 1)) continue; near = Math.min(near, Math.hypot(e.x - p.x, e.z - p.z) / 1024); }
     const fear = Math.max(0, Math.min(1, 1 - near / 7)), rate = 0.9 + fear * 1.6; A.heart += dt * rate;
     if (fear > 0.05 && A.heart >= 1) { A.heart = 0; A.tone(48, 0.16, 'sine', 0.25 * fear + 0.05); A.tone(44, 0.14, 'sine', 0.18 * fear + 0.04, 0, 0, 0.18); } else if (A.heart >= 1) A.heart = 0;
     const b = A.bed?.def; if (b?.march) { A.bed.beat += dt; if (A.bed.beat >= 0.5) { A.bed.beat = 0; A.hiss(0.09, 180, p.marked ? 0.25 : 0.08); } }

@@ -38,7 +38,7 @@ export function createHud() {
     if (!voiced) tags.push(['warn', '∅ VOICELESS']);
     set($('tags'), 'tags', tags.map(t => t[1]).join('|'), el => { el.innerHTML = tags.map(([k, t]) => `<span class="tag ${k}">${esc(t)}</span>`).join(''); });
     // nearest threat: always-visible proximity meter with a name
-    let best = null, bd = 1e9; for (const e of sim.ents) { if (e.mode === 9 || (e.type === ET.HUSK && e.mode === 0) || (e.type === ET.MARCHER && !p.marked)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
+    let best = null, bd = 1e9; for (const e of sim.ents) { if (e.mode === 9 || (e.type === ET.HUSK && e.mode === 0) || (e.type === ET.MARCHER && !p.marked) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && c.phase !== 1)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
     const show = !!best && bd < 12 * 1024; set($('threatPanel'), 'thr', show, (el, v) => { el.hidden = !v; });
     if (show) {
       const sl = best.type === ET.SLUMBERER; set($('threatLabel'), 'thl', best.type + ':' + best.mode + (sl ? c.sing : ''), el => { el.textContent = sl ? 'THE SLUMBERER · WAKING' : NAMES[best.type] + (best.mode === 8 ? ' · STAGGERED' : best.mode === 1 ? ' · HUNTING' : ' · NEAR'); });
