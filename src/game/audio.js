@@ -41,8 +41,8 @@ export function createAudio() {
     A.chapter = id; if (!A.ready) return;
     if (A.bed) { const old = A.bed; old.out.gain.setTargetAtTime(0, now(), 0.8); setTimeout(() => old.nodes.forEach(n => { try { n.stop(); } catch { /* already stopped */ } }), 4000); }
     const b = BEDS[id] || BEDS[1], out = A.ctx.createGain(), nodes = []; out.gain.value = 0; out.connect(A.master); out.gain.setTargetAtTime(1, now(), 1.2);
-    const lfo = A.ctx.createOscillator(), lfoG = A.ctx.createGain(); lfo.frequency.value = b.lfo; lfoG.gain.value = 0.35; lfo.connect(lfoG); lfo.start(); nodes.push(lfo);
-    b.ratios.forEach((r, i) => { const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = i ? 'sine' : 'sawtooth'; o.frequency.value = b.root * r; o.detune.value = (i - 1) * 4; g.gain.value = i ? 0.035 : 0.025; const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260 + i * 140; o.connect(lp); lp.connect(g); g.connect(out); lfoG.connect(g.gain); o.start(); nodes.push(o); });
+    const lfo = A.ctx.createOscillator(); lfo.frequency.value = b.lfo; lfo.start(); nodes.push(lfo); // depth is set per voice: 35% of that voice's own level
+    b.ratios.forEach((r, i) => { const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = i ? 'sine' : 'sawtooth'; o.frequency.value = b.root * r; o.detune.value = (i - 1) * 4; const base = i ? 0.035 : 0.025, depth = A.ctx.createGain(); g.gain.value = base; depth.gain.value = base * 0.35; lfo.connect(depth); const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260 + i * 140; o.connect(lp); lp.connect(g); g.connect(out); depth.connect(g.gain); o.start(); nodes.push(o); });
     const n = noise(), nf = A.ctx.createBiquadFilter(), ng = A.ctx.createGain(); nf.type = 'lowpass'; nf.frequency.value = b.noise; ng.gain.value = b.level; n.connect(nf); nf.connect(ng); ng.connect(out); n.start(); nodes.push(n);
     if (b.surf) { const sl = A.ctx.createOscillator(), sg = A.ctx.createGain(); sl.frequency.value = 0.11; sg.gain.value = b.level * 1.6; sl.connect(sg); sg.connect(ng.gain); sl.start(); nodes.push(sl); }
     A.bed = { out, nodes, def: b, beat: 0 };
