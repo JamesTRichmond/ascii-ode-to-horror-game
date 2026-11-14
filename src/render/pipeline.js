@@ -55,6 +55,18 @@ export function setScene(pl, sim) {
   pl.sel.prev.slotOf.fill(-1); pl.sel.cur.slotOf.fill(-1);
 }
 
+/**
+ * Move a running scene to a pipeline of another tier without restarting it. World heights (including walls
+ * mid-animation), light transport, atmosphere, effect clocks, decay trails and mesh instances are resolution
+ * independent and carry over; screen-space history (G-buffer, leaves, glyph history) belongs to the old
+ * resolution and starts fresh.
+ */
+export function adoptScene(pl, from) {
+  for (const k of ['world', 'cascades', 'shadow', 'mist', 'time', 'humLevel', 'flash', 'trails', 'instances']) pl[k] = from[k];
+  Object.assign(pl.opts, from.opts); pl.firstFrame = true;
+  return pl;
+}
+
 function instance(pl, key) { let i = pl.instances.get(key); if (!i) { i = { x: 0, y: 0, z: 0, yaw: 0, scale: 1 }; pl.instances.set(key, i); } i.used = true; return i; }
 
 /**
