@@ -67,8 +67,8 @@ screen column and rasterises only small creature meshes. The measured columns co
 | Instance upload + draw | ≤ 3 | 0.1–0.2 upload (browser, software GL) | same |
 | **Total render** | **≤ 30** | **44.8 / 73.8 — over budget** | **20.5 / 29.0 — within budget** |
 
-The G-buffer is the only stage that beat its target. Lighting, fog, flow and selection were each
-under-estimated by 2–2.5×, so the 30 ms total holds at the low tier and not at the high tier on
+The simulation, the G-buffer and the instance upload came in under target. Lighting, fog, flow and
+selection were each under-estimated by 2–2.5×, so the 30 ms total holds at the low tier and not at the high tier on
 this CPU.
 
 Cascades are not amortised. The shipped renderer re-solves all four cascade levels and one damped
