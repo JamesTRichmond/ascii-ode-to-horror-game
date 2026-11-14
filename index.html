@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ODE — a horror in nine stanzas</title>
+<meta name="description" content="A first-person horror game in volumetric ASCII, built on Arthur O'Shaughnessy's Ode.">
+<link rel="stylesheet" href="src/game/style.css">
+</head>
+<body>
+<main id="app">
+  <div id="stage" aria-label="Game view. The scene is rendered as glyphs; all game state is also reported in the status panel.">
+    <canvas id="view" width="1440" height="810"></canvas>
+    <canvas id="debug" hidden></canvas>
+  </div>
+  <section id="hud" aria-label="Status" hidden>
+    <div class="hud-top">
+      <div class="panel" id="chapterPanel"><span class="kicker" id="chapterKicker"></span><strong id="chapterTitle"></strong><span id="objective"></span></div>
+      <div class="panel right" id="measurePanel"><span class="kicker">MEASURES</span><span id="measures" role="img"></span></div>
+    </div>
+    <div class="threat panel" id="threatPanel" hidden><span class="kicker" id="threatLabel">THREAT</span><div class="bar" role="progressbar" aria-labelledby="threatLabel" aria-valuemin="0" aria-valuemax="100" id="threatBar"><i></i></div></div>
+    <p id="caption" aria-live="polite"></p>
+    <p id="alert" role="alert"></p>
+    <div class="hud-bottom">
+      <div class="panel meters">
+        <div class="meter"><span class="kicker" id="hpLabel">♥ WRITTEN</span><div class="bar hp" role="progressbar" aria-labelledby="hpLabel" aria-valuemin="0" aria-valuemax="100" id="hpBar"><i></i></div><b id="hpText">100</b></div>
+        <div class="meter"><span class="kicker" id="brLabel">≋ BREATH</span><div class="bar br" role="progressbar" aria-labelledby="brLabel" aria-valuemin="0" aria-valuemax="100" id="brBar"><i></i></div><b id="brText">0</b></div>
+      </div>
+      <div class="panel skills" id="skills" aria-label="Voice">
+        <span class="skill" id="skHum"><kbd>Space</kbd> Hum</span><span class="skill" id="skChord"><kbd>F</kbd> Chord</span><span class="skill" id="skHold"><kbd>Shift</kbd> Hold breath</span><span class="skill" id="skUse"><kbd>E</kbd> Use</span>
+      </div>
+      <div class="panel tags" id="tags" aria-live="polite"></div>
+    </div>
+  </section>
+  <div id="touch" hidden aria-label="Touch controls">
+    <div class="pad"><button data-in="16" aria-label="Turn left">↺</button><button data-in="1" aria-label="Forward">▲</button><button data-in="32" aria-label="Turn right">↻</button><button data-in="4" aria-label="Strafe left">◀</button><button data-in="2" aria-label="Back">▼</button><button data-in="8" aria-label="Strafe right">▶</button></div>
+    <div class="pad acts"><button data-in="64">Hum</button><button data-in="128">Chord</button><button data-in="256">Hold</button><button data-in="512">Use</button></div>
+  </div>
+  <section id="menu" class="overlay" aria-labelledby="menuTitle"></section>
+  <div id="stats" hidden></div>
+</main>
+<script type="module" src="src/game/main.js"></script>
+</body>
+</html>
