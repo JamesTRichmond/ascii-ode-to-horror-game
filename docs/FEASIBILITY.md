@@ -47,20 +47,34 @@ Reference point from the guide's own embedded statistics: its CPU renderer takes
 the same stages fit a real-time budget once the G-buffer is sized to the glyph grid and output is
 instanced.
 
-## Frame budget (target, to be verified with measurements in Phase 4)
+## Frame budget: Phase 1 targets against the measured implementation
 
-| Stage | Budget |
-|---|---|
-| Simulation tick (60 Hz, fixed) | ≤ 1 ms |
-| G-buffer: world trace + mesh raster + velocity | ≤ 8 ms |
-| Lighting + cascade sampling | ≤ 5 ms |
-| Fog march (half res) | ≤ 4 ms |
-| Structure tensor + ETF | ≤ 4 ms |
-| Quadtree + selection + temporal | ≤ 6 ms |
-| Instance upload + draw | ≤ 3 ms |
-| **Total render** | **≤ 30 ms (≥ 33 fps) at 480×270; 60 fps at 320×180** |
+The targets below were set in Phase 1. The spike's 12.04 ms p95 G-buffer fill exceeded its own 8 ms
+line because it rasterised 6,000 synthetic triangles; the shipped renderer traces the world once per
+screen column and rasterises only small creature meshes. The measured columns come from
+`docs/TEST_REPORT.md` (PR 5): Chapter 1, 199 frames, CPU pipeline in Node v22.23.4 on an Intel Xeon
+2.10 GHz, 4 vCPU, values p50 / p95 in ms.
 
-Cascade updates are amortised (one cascade level per frame) and are outside the per-frame total.
+| Stage | Phase 1 target | Measured, high 480×270 | Measured, low 320×180 |
+|---|---|---|---|
+| Simulation tick (60 Hz, fixed) | ≤ 1 | under 1 (not split by tier) | under 1 |
+| G-buffer: world trace + mesh raster + velocity | ≤ 8 | 2.7 / 5.1 | 1.3 / 2.1 |
+| Lighting, including the full cascade solve | ≤ 5 | 12.5 / 22.2 | 6.8 / 10.3 |
+| Fog march | ≤ 4 | 7.6 / 10.9 | 3.3 / 4.5 |
+| Structure tensor + ETF | ≤ 4 | 8.8 / 15.3 | 3.8 / 5.6 |
+| Quadtree | ≤ 6 (with selection) | 2.7 / 5.2 | 1.2 / 1.8 |
+| Selection + temporal | (in the line above) | 9.0 / 17.9 | 4.1 / 6.1 |
+| Instance upload + draw | ≤ 3 | 0.1–0.2 upload (browser, software GL) | same |
+| **Total render** | **≤ 30** | **44.8 / 73.8 — over budget** | **20.5 / 29.0 — within budget** |
+
+The simulation, the G-buffer and the instance upload came in under target. Lighting, fog, flow and
+selection were each under-estimated by 2–2.5×, so the 30 ms total holds at the low tier and not at the high tier on
+this CPU.
+
+Cascades are not amortised. The shipped renderer re-solves all four cascade levels and one damped
+bounce every frame on the main thread. That cost is part of the lighting row above and therefore of
+the per-frame total: 2.8 / 4.6 ms (p50 / p95) at high, 2.7 / 3.7 ms at low, on Chapter 1. Spreading
+levels across frames or moving the solve to a worker remains a possible optimisation.
 
 ## Risks
 
@@ -85,4 +99,6 @@ Carried forward from the guide's implementation ledger; these will be stated in 
 
 ## Verdict
 
-Feasible on the chosen stack with no runtime dependencies. Proceed to Phase 2.
+Feasible on the chosen stack with no runtime dependencies, with one qualification from the
+measurements above: on a CPU of this class the 30 ms budget is met at the low tier only. The game
+therefore selects its tier automatically from measured frame time (PR 5) rather than assuming high.
