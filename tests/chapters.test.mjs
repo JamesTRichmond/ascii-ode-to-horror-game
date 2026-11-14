@@ -2,7 +2,7 @@
 // finish by the deterministic autoplayer. Chapter 9 is checked for both endings.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSim, step, hashState, TICK_HZ } from '../src/sim/sim.js';
+import { createSim, step, hashState, TICK_HZ, packInput, IN } from '../src/sim/sim.js';
 import { CHAPTERS, STANZAS, RULE } from '../src/sim/chapters.js';
 import { createBot, botInput } from '../src/sim/bot.js';
 
@@ -27,4 +27,10 @@ for (let c = 0; c < CHAPTERS.length; c++) {
 }
 test('chapter 9 has two endings: sing (1) and silence (2)', () => {
   assert.equal(playthrough(8, 108, 300, 2).sim.c.ending, 2); const sung = playthrough(8, 108, 300, 1).sim; assert.equal(sung.c.done, 1); assert.equal(sung.c.ending, 1);
+});
+test('chapter 5: a guttered flame can be relit where the player began, even with every brazier unlit', () => {
+  const sim = createSim(4, 104); assert.equal(sim.c.lit, 0); assert.equal(sim.p.flame, 1);
+  for (let i = 0; i < 60; i++) { step(sim, packInput(IN.HUM)); sim.events.length = 0; }
+  assert.equal(sim.p.flame, 0, 'humming gutters the flame'); assert.equal(sim.c.lit, 0, 'no brazier is lit to relight from');
+  step(sim, packInput(IN.USE)); assert.equal(sim.p.flame, 1, 'the hearth at the start relights it'); assert.ok(sim.events.some(e => e.type === 'relight'));
 });
