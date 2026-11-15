@@ -30,7 +30,7 @@ The preview server sends the same security headers as `vercel.json` (including t
 |---|---|---|
 | GitHub Release (draft) | `.github/workflows/release.yml` → `github-release` job | Push of a tag `v*` matching `package.json` |
 | GitHub Pages | `.github/workflows/release.yml` → `pages` job | Manual run of *Release* with `deploy_pages` checked |
-| Vercel | `vercel.json` (build `node tools/build.mjs --no-pack`, output `dist`) | Git auto-deploy of `main` is disabled in the config; deploy from the Vercel dashboard or CLI |
+| Vercel | `vercel.json` (build `node tools/build.mjs --no-pack`, output `dist`) | Git-triggered deployments are disabled for every branch in the config; deploy from the Vercel dashboard or CLI |
 | CI | `.github/workflows/ci.yml` | Every pull request and every branch push, `main` included (tests, build, atlas reproducibility); it never deploys |
 
 ## Day-one patch
