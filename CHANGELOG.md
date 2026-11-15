@@ -32,7 +32,7 @@
 - Tests: signed seam count with an oriented fixture, limb-edge coverage, Chapter 1 mute-start assertions, hearth and ending regression tests.
 
 ### Corrected claims
-- Guide task 3-3 (offline differentiable optimisation) is not implemented; `optimize.js` is a diagnostic.
+- Guide task 3-3 (offline differentiable optimisation) is implemented in `src/render/heroopt.js` with `tools/optimize-hero.mjs`; `optimize.js` remains a runtime relaxation diagnostic.
 
 ## 1.0.0-rc.1 — Phase 4 (Testing & Polish)
 
