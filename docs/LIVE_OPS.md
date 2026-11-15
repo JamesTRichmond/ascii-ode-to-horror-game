@@ -19,7 +19,7 @@ Opt-in, first-party, minimal. Implementation: `src/game/telemetry.js`.
 | `session_start` | `tier`, `reducedMotion`, `textScale` | Boot |
 | `chapter_start` | `chapter` | New chapter (not on restore) |
 | `chapter_complete` | `chapter`, `tick`, `hp` | Exit reached |
-| `death` | `chapter`, `tick`, `hp`, `measures` | Unwritten |
+| `death` | `chapter`, `tick`, `hp`, `measures`, `cx`, `cz` (map cell) | Unwritten |
 | `ending` | `ending` (1 sing, 2 silence) | Chapter 9 |
 | `perf` | `tier`; `cpuP50`, `cpuP95` (main-thread work per frame, ms); `intervalP50`, `intervalP95` (time between rendered frames, ms, which includes missed refreshes and GPU waits) | Each chapter completion |
 | `endless_verse` / `endless_end` | `seed`, `depth` | Endless Choir |
