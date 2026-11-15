@@ -23,7 +23,7 @@ Command: `npm test` → **76 tests, 76 pass, 0 fail.**
 | | Metric depth, HDR radiance, reprojection | Pass — 7.000 m wall, analytic floor, 97 %+ reprojection hits | |
 | 03 Light | Homogeneous slab = exp(−σd) at 10/100/1000 steps | Pass — error < 1e-12 | `phase3-light` |
 | | Renderer fog within 1 %, step halving stable, no negative density | Pass — step halving changes in-scatter 0.06 % | |
-| | Wall occluder | Pass — walled fluence 14.5 % of open at the shadow probe (bilinear merge leak, documented) | |
+| | Wall occluder | Pass — walled fluence 0.0 % of open at the shadow probe with the bilinear-fix merge (14.5 % with the plain merge, still used at the low tier); mean error vs a brute-force reference 0.453 → 0.156 | |
 | | Bounded multi-bounce, colour bleed, energy | Pass — residual 1.000 → 0.264 → 0.086 → 0.030; red stays red | |
 | 04 Shape & flow | Vertical edge → vertical tangent; antiparallel align; isotropic → 0 | Pass | `phase4-shape` |
 | | 6/12/24-D benchmark | Self-match 0.966 / 0.978 / 0.989; 2.56 / 2.08 / 2.91 µs per leaf | |

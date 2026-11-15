@@ -26,7 +26,7 @@ Chromium; see `docs/TEST_REPORT.md` for what has and has not been tested.
 
 - Firefox, Safari and mobile devices have not been tested.
 - On machines without a GPU the game runs at roughly 20–30 fps at the lowest tier.
-- Light can leak slightly around wall ends (a limitation of the 2.5D light transport).
+- Light around wall ends is now occlusion-correct at the medium and high tiers (bilinear-fix cascade merge); the low tier keeps the cheaper plain merge, which can leak slightly.
 
 ## Verifying the download
 
