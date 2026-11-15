@@ -29,8 +29,13 @@ Questions this answers: where players die (chapter, tick), where they quit (star
 which endings are chosen, whether the auto tier holds 30 fps in the field (`intervalP95` at or under 33.3 ms;
 the CPU figures alone cannot show that).
 
-To turn it on for a deployment: set `endpoint` in `telemetry.json` to a collector you operate, and
-announce it in the release notes. Players still have to opt in.
+To turn it on for a deployment, set `endpoint` in `telemetry.json` to a collector you operate and announce it in
+the release notes. Players still have to opt in. What else the endpoint needs depends on where it lives:
+
+| Endpoint | Also required |
+|---|---|
+| Same-origin path, e.g. `"/api/telemetry"` (recommended) | Nothing: the production CSP already allows `connect-src 'self'`, and same-origin beacons need no CORS |
+| External `https://` collector | 1. Add the collector's origin to `connect-src` in the `Content-Security-Policy` header in `vercel.json` (e.g. `connect-src 'self' https://collector.example`); without it the browser blocks every beacon. `tools/serve.mjs` applies the same header, so local play shows the same block. 2. The collector must accept cross-origin POSTs from the game's origin. The beacon is sent as `Content-Type: application/json` with credentials mode `include`, so the browser first sends a CORS preflight (`OPTIONS`). Answer it, and the POST, with `Access-Control-Allow-Origin: <the game's exact origin>` (not `*`, because credentials are included), `Access-Control-Allow-Credentials: true`, `Access-Control-Allow-Methods: POST` and `Access-Control-Allow-Headers: Content-Type` |
 
 ## 2. Crash reporting
 
