@@ -23,6 +23,7 @@
     "fuzz": "node tools/fuzz.mjs",
     "optimize:hero": "node tools/optimize-hero.mjs",
     "goldens": "node tools/goldens.mjs",
-    "bench": "node tools/bench.mjs"
+    "bench": "node tools/bench.mjs",
+    "terminal": "node tools/terminal.mjs"
   }
 }
