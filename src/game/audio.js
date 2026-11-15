@@ -1,6 +1,7 @@
 // Synthesised audio (WebAudio, no samples). Presentation only: it consumes simulation events and
 // snapshots, and never feeds anything back into the simulation.
 import { ET } from '../sim/sim.js';
+import { roomAcoustics, impulseResponse } from './reverb.js';
 
 // Per-chapter bed: root (Hz), drone interval ratios, noise colour (lowpass Hz), noise level, LFO rate
 const BEDS = {
@@ -28,11 +29,20 @@ export function createAudio() {
     const AC = globalThis.AudioContext || globalThis.webkitAudioContext; if (!AC) return;
     A.ctx = new AC(); A.master = A.ctx.createGain(); A.master.gain.value = A.volume;
     const comp = A.ctx.createDynamicsCompressor(); A.master.connect(comp); comp.connect(A.ctx.destination); A.ready = true;
+    // room acoustics: a convolution send whose impulse response is derived from the current level's geometry
+    A.reverb = A.ctx.createConvolver(); A.wet = A.ctx.createGain(); A.wet.gain.value = 0; A.master.connect(A.reverb); A.reverb.connect(A.wet); A.wet.connect(comp);
+    if (A.room) A.setRoom(A.room);
     // the player's hum: a perfect fifth (G3 + D4) through a gentle formant filter
     const g = A.ctx.createGain(), f = A.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 0.8; g.gain.value = 0;
     const o1 = A.ctx.createOscillator(), o2 = A.ctx.createOscillator(); o1.type = 'triangle'; o2.type = 'sine'; o1.frequency.value = 196; o2.frequency.value = 293.7;
     o1.connect(f); o2.connect(f); f.connect(g); g.connect(A.master); o1.start(); o2.start(); A.hum = { g, o1, o2 };
     if (A.chapter) A.setChapter(A.chapter);
+  };
+  /** Rebuild the reverb for a level: Sabine RT60 and early reflections from its tile map (see reverb.js). */
+  A.setRoom = sim => {
+    A.room = sim; if (!A.ready || !A.reverb) return;
+    const room = roomAcoustics(sim), [L, R] = impulseResponse(room, A.ctx.sampleRate, (sim.def.id * 7919) ^ sim.w), buf = A.ctx.createBuffer(2, L.length, A.ctx.sampleRate);
+    buf.copyToChannel(L, 0); buf.copyToChannel(R, 1); A.reverb.buffer = buf; A.wet.gain.setTargetAtTime(room.indoor ? 0.32 : 0.16, now(), 0.4); A.acoustics = room;
   };
   A.setVolume = v => { A.volume = v; if (A.master) A.master.gain.setTargetAtTime(v, now(), 0.05); };
 
