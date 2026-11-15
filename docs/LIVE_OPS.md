@@ -42,9 +42,9 @@ the release notes. Players still have to opt in. What else the endpoint needs de
 | Step | Detail |
 |---|---|
 | Capture | `error` and `unhandledrejection` listeners plus a guard around each frame |
-| Player sees | "Something broke" overlay: saved progress is safe; *Copy crash report*; restart; title |
-| Report contents | Message, stack with origins stripped, version, chapter or Endless `{seed, depth}`, run seed, tick, state hash, **the run-length-encoded input log** (up to 10 minutes), render tier, browser family |
-| Reproduction | `node tools/replay.mjs report.json` replays the session deterministically and checks tick and hash (`REPRODUCED` / `DIVERGED`) |
+| Player sees | "Something broke" overlay: saved progress is safe; *Copy crash report* (status in the dialog; if the clipboard is refused, the report appears selected in a read-only field to copy by hand); *Restart chapter* / *Restart verse* (rebuilds the renderer first); *Reload the game*; *Title* |
+| Report contents | Message, stack with origins stripped, version, chapter or Endless `{seed, depth}`, run seed, tick, state hash, **the run-length-encoded input log** (at most 10 minutes), `base` (`{tick, state}`: the serialized sim the log starts from after a restored checkpoint or a 10-minute re-base; `null` when the log starts at tick 0), `failingInput` (the word whose `step()` threw, kept out of the log; `tick` is then the last completed tick and `hash` is `null`), render tier, browser family |
+| Reproduction | `node tools/replay.mjs report.json` replays the session deterministically from `base` (or tick 0), then retries `failingInput` once if present. It checks each supplied expectation: `expect` first, then the crash's own `tick` / `hash`. Exit 0 = `REPRODUCED`, or `REPLAYED` when nothing is expected or `--until <tick>` stopped early; 1 = `DIVERGED`; 2 = unreadable or invalid report |
 | Verified | A fault forced in the browser produced a report that replayed to the same tick and hash in Node (PR 6) |
 
 ## 3. Hotfix pipeline
