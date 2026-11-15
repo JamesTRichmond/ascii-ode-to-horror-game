@@ -21,7 +21,7 @@ const git = (...a) => { try { return execFileSync('git', ['-C', root, ...a], { e
 const commit = process.env.GITHUB_SHA || git('rev-parse', 'HEAD') || 'unknown';
 const epoch = +(process.env.SOURCE_DATE_EPOCH || git('log', '-1', '--format=%ct') || 0);
 const builtAt = new Date(epoch * 1000).toISOString();
-const INCLUDE = ['index.html', 'src', 'assets', 'LICENSE', 'assets/atlas/FONT-LICENSE.txt', 'telemetry.json'];
+const INCLUDE = ['index.html', 'sw.js', 'manifest.webmanifest', 'src', 'assets', 'LICENSE', 'assets/atlas/FONT-LICENSE.txt', 'telemetry.json'];
 const SKIP = f => /\.(test|spec)\.m?js$/.test(f) || f.endsWith('.map');
 
 fs.rmSync(dist, { recursive: true, force: true }); fs.mkdirSync(dist, { recursive: true });

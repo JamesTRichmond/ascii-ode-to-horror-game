@@ -79,7 +79,10 @@ function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; 
 async function checkForUpdate() {
   try {
     const r = await fetch('version.json', { cache: 'no-store' }); if (!r.ok) return null;
-    const v = await r.json(); G.deployed = v; return v.version !== VERSION ? v.version : null;
+    const v = await r.json(); G.deployed = v;
+    // offline play: only production builds (whose version.json lists their files) install the service worker, so a
+    // source checkout under development is never served stale modules from a cache
+    if (v.files && 'serviceWorker' in navigator && !params.has('nosw')) navigator.serviceWorker.register('sw.js').catch(e => console.info('offline cache unavailable:', e.message)); return v.version !== VERSION ? v.version : null;
   } catch { return null; }
 }
 function title() {
