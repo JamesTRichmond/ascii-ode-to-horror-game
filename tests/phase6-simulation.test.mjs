@@ -82,3 +82,11 @@ test('dirty-run text fallback: unchanged frames cost nothing, one changed cell i
   const { pl, atlas } = specimen('high', 2), grid = new TextGrid(160, 60); grid.fromInstances(pl.sel.inst, pl.sel.count, atlas, pl.w, pl.h); const full = grid.diff(true).length; grid.fromInstances(pl.sel.inst, pl.sel.count, atlas, pl.w, pl.h); const again = grid.diff().length;
   t.diagnostic(`real frame on a 160x60 grid: full redraw ${full} runs / ${grid.stats.fullCells} cells; unchanged next frame ${again} runs`); assert.equal(again, 0); assert.ok(full > 50 && full < grid.stats.fullCells);
 });
+
+test('assist game speed scales wall time only: half speed gives half the ticks, each one identical', () => {
+  const ticksFor = speed => { const st = { acc: 0 }; let n = 0; for (let f = 0; f < 120; f++) n += consumeTicks(st, 1 / 60, MAX_CATCHUP, speed); return n; };
+  assert.equal(ticksFor(1), 120); assert.equal(ticksFor(0.5), 60); assert.ok(Math.abs(ticksFor(0.7) - 84) <= 1, 'float accumulation: within one tick'); assert.equal(ticksFor(0.01), 30, 'clamped at 25%');
+  const a = createSim(ARENA, 7), b = createSim(ARENA, 7), st = { acc: 0 };
+  for (let f = 0; f < 600; f++) { const n = consumeTicks(st, 1 / 60, MAX_CATCHUP, 0.5); for (let k = 0; k < n; k++) step(a, 1); }
+  for (let t = 0; t < a.tick; t++) step(b, 1); assert.equal(hashState(a), hashState(b), 'the same ticks produce the same state at any speed');
+});
