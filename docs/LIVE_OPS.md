@@ -21,12 +21,13 @@ Opt-in, first-party, minimal. Implementation: `src/game/telemetry.js`.
 | `chapter_complete` | `chapter`, `tick`, `hp` | Exit reached |
 | `death` | `chapter`, `tick`, `hp`, `measures` | Unwritten |
 | `ending` | `ending` (1 sing, 2 silence) | Chapter 9 |
-| `perf` | `tier`, `p50`, `p95` (ms) | Each chapter completion |
+| `perf` | `tier`; `cpuP50`, `cpuP95` (main-thread work per frame, ms); `intervalP50`, `intervalP95` (time between rendered frames, ms, which includes missed refreshes and GPU waits) | Each chapter completion |
 | `endless_verse` / `endless_end` | `seed`, `depth` | Endless Choir |
 | `crash` | `message`, `chapter`, `tick` | Any uncaught error |
 
 Questions this answers: where players die (chapter, tick), where they quit (start without complete),
-which endings are chosen, whether the auto tier holds 30 fps in the field.
+which endings are chosen, whether the auto tier holds 30 fps in the field (`intervalP95` at or under 33.3 ms;
+the CPU figures alone cannot show that).
 
 To turn it on for a deployment: set `endpoint` in `telemetry.json` to a collector you operate, and
 announce it in the release notes. Players still have to opt in.

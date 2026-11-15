@@ -27,7 +27,12 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
     else if (e.type === 'complete') emit('chapter_complete', { chapter: sim.def.id, tick: sim.tick, hp: sim.p.hp });
     else if (e.type === 'ending') emit('ending', { ending: e.a });
   };
-  T.perf = (tier, frames) => { if (frames.length < 30) return; const s = [...frames].sort((a, b) => a - b); emit('perf', { tier, p50: +s[s.length >> 1].toFixed(1), p95: +s[Math.floor(s.length * 0.95)].toFixed(1) }); };
+  /** cpu: main-thread work per frame (sim + render + output submit). intervals: time between rendered frames, which also
+   *  counts missed refreshes and GPU waits; intervalP95 <= 33.3 ms is the field check for the 30 fps target. */
+  T.perf = (tier, cpu, intervals = []) => {
+    if (cpu.length < 30) return; const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return +s[Math.min(s.length - 1, Math.floor(s.length * p))].toFixed(1); };
+    emit('perf', { tier, cpuP50: q(cpu, 0.5), cpuP95: q(cpu, 0.95), ...(intervals.length >= 30 ? { intervalP50: q(intervals, 0.5), intervalP95: q(intervals, 0.95) } : {}) });
+  };
   /** Build a crash report with everything needed to replay the session deterministically. */
   T.crash = (error, origin = 'error') => {
     const st = getState?.() || {};

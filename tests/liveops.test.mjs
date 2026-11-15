@@ -53,3 +53,16 @@ test('hotfix tool bumps every version site and opens a changelog entry', () => {
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version, '1.0.1'); assert.match(fs.readFileSync(path.join(dir, 'src/game/main.js'), 'utf8'), /'1\.0\.1'/); assert.match(fs.readFileSync(path.join(dir, 'CHANGELOG.md'), 'utf8'), /## 1\.0\.1[\s\S]*Fix the thing/);
   fs.rmSync(dir, { recursive: true });
 });
+
+test('perf telemetry separates CPU work time from the interval between frames', () => {
+  const T = createTelemetry({ version: 't' }), cpu = Array.from({ length: 100 }, (_, i) => 10 + (i % 10)), intervals = Array.from({ length: 100 }, (_, i) => (i < 90 ? 16.7 : 50));
+  T.perf('medium', cpu, intervals); const e = T.events.at(-1);
+  assert.deepEqual([e.cpuP50, e.cpuP95, e.intervalP50, e.intervalP95], [15, 19, 16.7, 50], 'a frame that waits on the display shows only in the interval');
+  T.perf('medium', cpu, []); assert.ok(!('intervalP95' in T.events.at(-1)), 'no interval figures from too few samples');
+});
+
+test('endless verses never produce campaign death or chapter_complete events', () => {
+  const T = createTelemetry({ version: 't' }), sim = createSim(endlessVerse(7, 2), 9);
+  T.event({ type: 'death' }, sim); T.event({ type: 'complete' }, sim); assert.equal(T.events.length, 0);
+  T.event({ type: 'death' }, createSim(0, 1)); assert.equal(T.events.at(-1).type, 'death');
+});

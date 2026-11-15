@@ -21,7 +21,7 @@ import { endlessVerse, weeklySeed } from '../sim/endless.js';
 
 export const VERSION = '1.1.0-rc.1';
 const U = CELL / 1024, $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
-const G = { mode: 'boot', chapter: 0, sim: null, prev: null, acc: 0, last: 0, pl: null, out: null, atlas: null, noise: null, atlasImage: null, atlasPx: null, save: loadSave(), log: [], seed: +(params.get('seed') || 100), bot: null, frames: [], switchRates: [], hud: createHud(), audio: createAudio(), input: null, bob: 0, hurtFlash: 0, cpu: null };
+const G = { mode: 'boot', chapter: 0, sim: null, prev: null, acc: 0, last: 0, pl: null, out: null, atlas: null, noise: null, atlasImage: null, atlasPx: null, save: loadSave(), log: [], seed: +(params.get('seed') || 100), bot: null, frames: [], intervals: [], switchRates: [], hud: createHud(), audio: createAudio(), input: null, bob: 0, hurtFlash: 0, cpu: null };
 const S = () => G.save.settings;
 
 async function loadAssets() {
@@ -149,7 +149,7 @@ function completed() {
   if (G.endless) { const { seed, depth } = G.endless; G.save.endlessBest = Math.max(G.save.endlessBest || 0, depth); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.();
     G.hud.menu(`VERSE ${depth}`, `<p class="stanza">${STANZAS[(depth - 1) % STANZAS.length].slice(0, 4).join('\n')}</p><p>Time ${(G.sim.tick / TICK_HZ).toFixed(1)}s · written ${G.sim.p.hp}/${TUNE.hpMax}</p>`, [{ label: `Verse ${depth + 1}`, primary: true, action: () => startEndless(seed, depth + 1) }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
   G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.(); const next = G.chapter + 1, secs = (G.sim.tick / TICK_HZ).toFixed(1);
-  G.telemetry?.perf(G.pl.quality, G.frames);
+  G.telemetry?.perf(G.pl.quality, G.frames, G.intervals);
   G.save.unlocked = Math.max(G.save.unlocked, Math.min(CHAPTERS.length, next + 1)); G.save.checkpoint = null; G.save.best[G.sim.def.id] = Math.min(G.save.best[G.sim.def.id] ?? 1e9, G.sim.tick); storeSave(G.save);
   const stanza = `<p class="stanza">${STANZAS[G.sim.def.id - 1].join('\n')}</p><p>Time ${secs}s · written ${G.sim.p.hp}/${TUNE.hpMax} · state hash ${hashState(G.sim).toString(16)}</p>`;
   if (G.sim.c.ending) { const sang = G.sim.c.ending === 1; if (!G.save.endings.includes(G.sim.c.ending)) G.save.endings.push(G.sim.c.ending); storeSave(G.save);
@@ -195,7 +195,8 @@ function frame(t) {
   try { frameBody(t); } catch (e) { crashed(G.telemetry ? G.telemetry.crash(e, 'frame') : { message: String(e) }); }
 }
 function frameBody(t) {
-  const elapsed = G.last ? Math.min(0.25, (t - G.last) / 1000) : 0; G.last = t;
+  const interval = G.last ? t - G.last : 0, elapsed = Math.min(0.25, interval / 1000); G.last = t;
+  if (interval && G.mode === 'play') { G.intervals.push(interval); if (G.intervals.length > 240) G.intervals.shift(); } // display-side frame time
   if (!G.sim || G.mode === 'title' || G.mode === 'boot') return;
   let ticks = 0; const simT0 = performance.now();
   if (G.mode === 'play') {
@@ -213,11 +214,12 @@ function frameBody(t) {
   else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx); c.ctx.putImageData(c.img, 0, 0); }
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
   G.hud.update(G.sim, elapsed, S().captions); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
-  // rolling statistics
+  // rolling statistics: G.frames is CPU work time for this frame, G.intervals the time between frames
   const total = performance.now() - simT0; G.frames.push(total);
   if (G.auto && G.mode === 'play') { const t2 = sampleFrame(G.auto, total); if (t2) setTier(t2); } if (G.frames.length > 240) G.frames.shift(); G.switchRates.push(G.pl.sel.stats.switchRate); if (G.switchRates.length > 240) G.switchRates.shift();
   if (S().stats && (t | 0) % 6 === 0) { const f = [...G.frames].sort((a, b) => a - b), sw = [...G.switchRates].sort((a, b) => a - b), ms = G.pl.stats.ms, q = (a, p) => a[Math.min(a.length - 1, Math.floor(a.length * p))] || 0;
-    $('stats').textContent = `frame p50 ${q(f, 0.5).toFixed(1)} p95 ${q(f, 0.95).toFixed(1)} ms\nsim ${simMs.toFixed(2)} ms x${ticks}\ngbuf ${ms.gbuffer.toFixed(1)} light ${ms.light.toFixed(1)} fog ${ms.fog.toFixed(1)}\ntree ${ms.tree.toFixed(1)} flow ${ms.flow.toFixed(1)} sel ${ms.select.toFixed(1)}\nleaves ${G.pl.qt.stats.leaves} [${G.pl.qt.stats.byLevel}] ovf ${G.pl.qt.stats.overflow}\nglyphs ${G.pl.sel.count} tris ${G.pl.stats.tris} tier ${G.pl.quality}${G.auto ? ' (auto)' : ''}\nswitch p95 ${(q(sw, 0.95) * 100).toFixed(1)}%\n${G.out ? `gpu upload ${G.out.stats.uploadMs.toFixed(2)} draw ${G.out.stats.drawMs.toFixed(2)}` : 'cpu compositor'}\ntick ${G.sim.tick} hash ${hashState(G.sim).toString(16)}`; }
+    const iv = [...G.intervals].sort((a, b) => a - b);
+    $('stats').textContent = `cpu p50 ${q(f, 0.5).toFixed(1)} p95 ${q(f, 0.95).toFixed(1)} ms\ninterval p50 ${q(iv, 0.5).toFixed(1)} p95 ${q(iv, 0.95).toFixed(1)} ms\nsim ${simMs.toFixed(2)} ms x${ticks}\ngbuf ${ms.gbuffer.toFixed(1)} light ${ms.light.toFixed(1)} fog ${ms.fog.toFixed(1)}\ntree ${ms.tree.toFixed(1)} flow ${ms.flow.toFixed(1)} sel ${ms.select.toFixed(1)}\nleaves ${G.pl.qt.stats.leaves} [${G.pl.qt.stats.byLevel}] ovf ${G.pl.qt.stats.overflow}\nglyphs ${G.pl.sel.count} tris ${G.pl.stats.tris} tier ${G.pl.quality}${G.auto ? ' (auto)' : ''}\nswitch p95 ${(q(sw, 0.95) * 100).toFixed(1)}%\n${G.out ? `gpu upload ${G.out.stats.uploadMs.toFixed(2)} draw ${G.out.stats.drawMs.toFixed(2)}` : 'cpu compositor'}\ntick ${G.sim.tick} hash ${hashState(G.sim).toString(16)}`; }
 }
 
 async function boot() {
@@ -237,7 +239,7 @@ async function boot() {
   if (matchMedia('(pointer: coarse)').matches) $('touch').hidden = false;
   addEventListener('keydown', e => { if (e.code === 'Escape' && G.mode === 'pause') resume(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
-  globalThis.__ode = { G, startChapter, startEndless, title, hashState: () => hashState(G.sim), stats: () => ({ tier: G.pl.quality, auto: G.auto ? { tier: G.auto.tier, changes: G.auto.changes, lastP95: G.auto.lastP95 } : null, frames: [...G.frames], switchRates: [...G.switchRates], ms: { ...G.pl.stats.ms }, leaves: { ...G.pl.qt.stats }, glyphs: { ...G.pl.sel.stats }, out: G.out ? { ...G.out.stats, kind: G.out.kind } : { kind: 'cpu' }, tick: G.sim?.tick, mode: G.mode, chapter: G.chapter, cascade: G.pl.stats.cascade }) };
+  globalThis.__ode = { G, startChapter, startEndless, title, hashState: () => hashState(G.sim), stats: () => ({ tier: G.pl.quality, auto: G.auto ? { tier: G.auto.tier, changes: G.auto.changes, lastP95: G.auto.lastP95 } : null, frames: [...G.frames], intervals: [...G.intervals], switchRates: [...G.switchRates], ms: { ...G.pl.stats.ms }, leaves: { ...G.pl.qt.stats }, glyphs: { ...G.pl.sel.stats }, out: G.out ? { ...G.out.stats, kind: G.out.kind } : { kind: 'cpu' }, tick: G.sim?.tick, mode: G.mode, chapter: G.chapter, cascade: G.pl.stats.cascade }) };
   requestAnimationFrame(frame);
   if (params.get('endless')) startEndless(+params.get('endless') || 1, +(params.get('depth') || 1)); else if (params.get('chapter')) startChapter(Math.max(0, Math.min(CHAPTERS.length - 1, +params.get('chapter') - 1))); else title();
 }
