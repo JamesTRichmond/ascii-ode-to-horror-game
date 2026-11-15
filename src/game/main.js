@@ -65,7 +65,7 @@ function startChapter(index, restored = null, isRestore = !!restored) {
   setScene(G.pl, G.sim); G.hud.setChapter(G.sim.def, CHAPTERS.length, G.endless); G.hud.closeMenu(); G.hud.show(true); G.mode = 'play'; G.input.enabled = true; G.input.reset();
   if (!isRestore) G.hud.caption(STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
   if (index >= 0 && !isRestore) G.telemetry?.track('chapter_start', { chapter: index + 1 });
-  G.audio.start(); G.audio.setChapter?.(G.sim.def.id);
+  G.audio.start(); G.audio.setChapter?.(G.sim.def.id); G.audio.setRoom?.(G.sim);
 }
 function pause() {
   if (G.mode !== 'play') return; G.mode = 'pause'; G.input.enabled = false; document.exitPointerLock?.();
