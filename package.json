@@ -5,7 +5,9 @@
   "type": "module",
   "description": "First-person horror in volumetric ASCII, after Arthur O'Shaughnessy's Ode.",
   "license": "MIT",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node tools/serve.mjs",
     "test": "node --test tests/*.test.mjs",
@@ -17,5 +19,8 @@
     "balance": "node tools/balance.mjs",
     "replay": "node tools/replay.mjs",
     "hotfix": "node tools/hotfix.mjs"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0"
   }
 }

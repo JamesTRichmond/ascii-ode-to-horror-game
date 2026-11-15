@@ -14,6 +14,10 @@ test('detector: finds statements after a trailing comment, ignores prose, string
     "save(); // keep going G.telemetry?.track('x', {}); G.mode = 'dead';",
     "push(w); // the log holds completed ticks only for (const e of G.sim.events) present(e);",
     "x = 1; // then const y = 2",
+    "a(); // later await save();",
+    "a(); // and if (dead) G.mode = 'dead'",
+    "a(); // reset t = 0;",
+    "const s = `a // b`; f(s); // then g(1);",
   ];
   for (const s of bad) assert.equal(hiddenCode(s).length, 1, s);
   const good = [
@@ -25,6 +29,12 @@ test('detector: finds statements after a trailing comment, ignores prose, string
     'a(); /* block: G.bot = 1; */ b();',
     'a(); // e.g. (see the guide)',
     'a(); // with st.toggle (assist), a press latches these on and the next press releases them',
+    'a(); // a camera exactly on a cell boundary exits at t = 0',
+    'a(); // see scriptURL() in safe-html.js',
+    'const s = `http://x.test/${a} // not a comment; b();`;',
+    'const t = `line one\n// still inside the template: G.bot = 1;\n`; f(t);',
+    "a(); // don't call f(x) here; it allocates",
+    'a(); // linear sRGB -> CIELAB (D65)',
   ];
   for (const s of good) assert.deepEqual(hiddenCode(s), [], s);
 });
