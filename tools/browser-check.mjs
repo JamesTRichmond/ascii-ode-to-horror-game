@@ -44,7 +44,11 @@ try {
     const tabs = []; for (let i = 0; i < 6; i++) { await p.keyboard.press('Tab'); tabs.push(await p.evaluate(() => document.activeElement?.textContent)); }
     await p.click('text=Settings'); await p.selectOption('select[data-k="reducedMotion"]', 'true'); await p.click('text=Done'); await p.click('text=Resume'); await p.waitForTimeout(500);
     const st = await p.evaluate(() => ({ mode: __ode.G.mode, audio: __ode.G.audio.ctx?.state ?? 'none', reducedMotion: __ode.G.pl.opts.reducedMotion }));
-    report.ui = { title, paused, focusCycle: tabs, ...st, errors: errs }; await p.close(); }
+    // every simulation event must reach the presentation layer (audio, HUD, effects, death/completion flow): force chords
+    await p.goto(base + '?chapter=2&quality=low'); await p.waitForFunction(() => globalThis.__ode?.G.sim); await p.waitForTimeout(500);
+    await p.evaluate(() => { const G = __ode.G, ev = G.audio.event; G.__presented = 0; G.audio.event = e => { G.__presented++; ev(e); }; G.input.poll = () => 128; });
+    await p.waitForTimeout(1500); const events = await p.evaluate(() => ({ presented: __ode.G.__presented, pending: __ode.G.sim.events.length }));
+    report.ui = { title, paused, focusCycle: tabs, ...st, events, errors: errs }; await p.close(); }
   { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
     await p.goto(`${base}?endless=7&depth=2&autoplay=1&quality=low`); await p.waitForTimeout(3000);
     const e = await p.evaluate(() => ({ kicker: document.getElementById('chapterKicker').textContent, mode: __ode.G.mode, tick: __ode.G.sim.tick }));
@@ -65,7 +69,7 @@ try {
 } finally { await browser.close(); server.kill(); }
 const PAUSE_MENU = new Set(['Resume', 'Settings', 'Restart chapter', 'Save and quit to title']);
 const uiOk = !!report.ui && report.ui.paused === 'PAUSED' && report.ui.mode === 'play' && !report.ui.errors.length
-  && report.ui.audio === 'running' && report.ui.reducedMotion === true && report.ui.focusCycle.length > 0 && report.ui.focusCycle.every(t => PAUSE_MENU.has(t));
+  && report.ui.audio === 'running' && report.ui.reducedMotion === true && report.ui.events.presented > 0 && report.ui.events.pending === 0 && report.ui.focusCycle.length > 0 && report.ui.focusCycle.every(t => PAUSE_MENU.has(t));
 const ok = report.chapters.every(c => c.mode === 'play' && !c.errors.length) && uiOk && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length)
   && report.liveops?.endless.mode === 'play' && report.liveops?.crash.overlay === 'SOMETHING BROKE' && report.liveops.crash.sent === 0 && report.liveops.crash.hasReplayContext
   && report.liveops.recovered.mode === 'play' && report.liveops.recovered.crashes === report.liveops.crash.crashes && report.liveops.recovered.depth === 2 && !report.liveops.errors.length;

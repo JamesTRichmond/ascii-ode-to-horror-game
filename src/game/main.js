@@ -205,7 +205,8 @@ function frameBody(t) {
     for (let k = 0; k < ticks; k++) {
       G.prev = snapshot(G.sim); const word = G.bot ? botInput(G.bot, G.sim) : G.input.poll();
       if (G.log.length >= INPUT_CAP) { G.base = { tick: G.sim.tick, state: Array.from(serialize(G.sim)) }; G.log = []; } // re-base instead of truncating
-      G.failingInput = word; step(G.sim, word); G.failingInput = null; G.log.push(word); // the log holds completed ticks only for (const e of G.sim.events) present(e); G.sim.events.length = 0;
+      G.failingInput = word; step(G.sim, word); G.failingInput = null; G.log.push(word); /* the log holds completed ticks only */
+      for (const e of G.sim.events) present(e); G.sim.events.length = 0;
     }
   }
   const simMs = performance.now() - simT0, alpha = G.mode === 'play' ? Math.min(1, G.acc / TICK) : 1, view = viewOf(G.prev, G.sim, alpha), p = G.sim.p;
