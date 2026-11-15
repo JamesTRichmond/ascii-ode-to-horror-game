@@ -22,6 +22,7 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
   T.track = emit;
   /** Simulation events worth counting; called by the game shell for every event. */
   T.event = (e, sim) => {
+    if (sim.def.endless) return; // Endless verses reuse campaign ids as themes; the shell emits endless_verse / endless_end instead
     if (e.type === 'death') emit('death', { chapter: sim.def.id, tick: sim.tick, hp: sim.p.hp, measures: sim.p.measures });
     else if (e.type === 'complete') emit('chapter_complete', { chapter: sim.def.id, tick: sim.tick, hp: sim.p.hp });
     else if (e.type === 'ending') emit('ending', { ending: e.a });
