@@ -37,7 +37,11 @@ function applySettings() {
 function resize() { const c = $('view'), dpr = Math.min(2, devicePixelRatio || 1), w = Math.min(1920, Math.round(c.clientWidth * dpr)) || 1440; c.width = w; c.height = Math.round((w * 9) / 16); }
 
 // ---------------------------------------------------------------- chapter flow
+/** One pending death/completion transition, bound to the sim that raised it; any new session or the title cancels it. */
+function defer(fn, ms) { clearTimeout(G.pending); const sim = G.sim; G.pending = setTimeout(() => { G.pending = 0; if (G.sim === sim && (G.mode === 'play' || G.mode === 'pause')) fn(); }, ms); }
+function cancelDeferred() { clearTimeout(G.pending); G.pending = 0; }
 function startChapter(index, restored = null) {
+  cancelDeferred();
   G.chapter = index; G.sim = restored || createSim(index, G.seed + index); G.prev = snapshot(G.sim); G.acc = 0; G.log = []; G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
   setScene(G.pl, G.sim); G.hud.setChapter(G.sim.def, CHAPTERS.length); G.hud.closeMenu(); G.hud.show(true); G.mode = 'play'; G.input.enabled = true; G.input.reset();
   if (!restored) G.hud.caption(STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
@@ -45,12 +49,12 @@ function startChapter(index, restored = null) {
 }
 function pause() {
   if (G.mode !== 'play') return; G.mode = 'pause'; G.input.enabled = false; document.exitPointerLock?.();
-  G.hud.menu('PAUSED', `<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Restart chapter', action: () => startChapter(G.chapter) }, { label: 'Save and quit to title', action: () => { G.save.checkpoint = { chapter: G.chapter, state: Array.from(serialize(G.sim)) }; storeSave(G.save); title(); } }], 'ODE');
+  G.hud.menu('PAUSED', `<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Restart chapter', action: () => startChapter(G.chapter) }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
 }
 const pause0 = () => { G.mode = 'play'; pause(); };
 function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; G.input.reset(); G.last = 0; }
 function title() {
-  G.mode = 'title'; G.input.enabled = false; G.hud.show(false); G.audio.silence?.(); const cp = G.save.checkpoint;
+  cancelDeferred(); G.mode = 'title'; G.input.enabled = false; G.hud.show(false); G.audio.silence?.(); const cp = G.save.checkpoint;
   G.hud.menu('ODE', `<p class="stanza">We are the music makers,\nAnd we are the dreamers of dreams…</p><p>A horror in nine stanzas, after Arthur O'Shaughnessy. Rendered entirely in glyphs.</p>`, [
     { label: 'Begin', primary: !cp, action: () => startChapter(0) },
     { label: 'Continue', primary: !!cp, disabled: !cp, action: () => { try { startChapter(cp.chapter, deserialize(Int32Array.from(cp.state))); } catch { startChapter(cp.chapter); } } },
@@ -111,8 +115,8 @@ function present(e) {
     case 'relight': hud.alert('THE FLAME RETURNS', 1.5); break;
     case 'gasp': hud.alert('YOU GASP', 1.2); break;
     case 'wake': burst(pl, x, 0.6, z, 20, 1.5, GOLDC, 1.2); hud.alert('THE SLEEPER STIRS', 1.2); break;
-    case 'death': burst(pl, x, 1.2, z, 120, 4, PALE, 1.6); setTimeout(died, S().reducedMotion ? 300 : 1400); break;
-    case 'complete': setTimeout(completed, 500); break;
+    case 'death': burst(pl, x, 1.2, z, 120, 4, PALE, 1.6); defer(died, S().reducedMotion ? 300 : 1400); break;
+    case 'complete': defer(completed, 500); break;
     default: break;
   }
 }
