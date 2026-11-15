@@ -1,5 +1,6 @@
 // Frame pipeline. Order is fixed by the guide: resolve continuous geometry -> transported light
 // and fog -> adaptive leaves -> surface flow -> glyph selection with temporal history -> output.
+import { createExposure, meter, adapt } from './exposure.js';
 import { createGBuffer, makeCamera, setCamera, copyCamera, traceWorld, rasterMesh, worldVelocity, CELL } from './gbuffer.js';
 import { createCascades, solveCascades, addEmitter, TEXELS_PER_CELL } from './cascades.js';
 import { shade, createFog, integrateFog, compositeFog, directionalShadow } from './light.js';
@@ -36,7 +37,7 @@ export function createPipeline(atlas, noise, quality = 'high') {
   const pl = {
     w, h, quality, atlas, noise, gb: createGBuffer(w, h), cam: makeCamera(w, h), prevCam: makeCamera(w, h), qt: createQuadtree(w, h, cap), flow: createFlow(w, h), fog: createFog(w, h, 4),
     sel: createSelector(w, h, cap, atlas, noise), trails: new DecayField(900), world: null, cascades: null, shadow: null, instances: new Map(), firstFrame: true, time: 0,
-    opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2 }, flash: 0, humLevel: 0,
+    opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2, autoExposure: false }, flash: 0, humLevel: 0, ae: createExposure(),
     stats: { ms: { gbuffer: 0, light: 0, fog: 0, tree: 0, flow: 0, select: 0, total: 0 }, tris: 0, cascade: null },
     env: null,
   };
@@ -55,6 +56,7 @@ export function shelterShadow(sim, out) {
 }
 
 export function setScene(pl, sim) {
+  pl.ae.snap = true;
   pl.world = buildWorld(sim); pl.cascades = createCascades(sim.w * TEXELS_PER_CELL, sim.h * TEXELS_PER_CELL);
   // static atmosphere: low mist banks over water, settling dust indoors (fog bodies in the heterogeneous field)
   // scan every eligible tile (water anywhere; open floor indoors) and keep blob centres at least MIST_GAP cells
@@ -83,7 +85,7 @@ export function setScene(pl, sim) {
  * resolution and starts fresh.
  */
 export function adoptScene(pl, from) {
-  for (const k of ['world', 'cascades', 'shadow', 'mist', 'time', 'humLevel', 'flash', 'trails', 'instances']) pl[k] = from[k];
+  for (const k of ['world', 'cascades', 'shadow', 'mist', 'time', 'humLevel', 'flash', 'trails', 'instances', 'ae']) pl[k] = from[k]; // the eye stays adapted across a tier change
   Object.assign(pl.opts, from.opts); pl.firstFrame = true;
   return pl;
 }
@@ -140,10 +142,12 @@ export function renderFrame(pl, view, dt) {
   }
   const apart = sim.def.glory && sim.c.phase === 1 ? 2.2 : 1, dirK = sim.def.dawn ? 0.25 + surge * 2.2 : 1;
   const lantern = { intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
-  const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure, stars: th.stars, dt };
+  const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure * (pl.opts.autoExposure ? pl.ae.ev : 1), stars: th.stars, dt };
   shade(gb, cam, env); const t2 = now(); ms.light = t2 - t1;
   fog.sigma = th.fog * pl.opts.fogScale * apart; fog.height = th.fogH; fog.ambient = th.fogAmb.map(v => v * (1 + surge * 3)); fog.blobs = pl.mist && pl.mist.length ? pl.mist.concat(blobs) : blobs.length ? blobs : null;
-  integrateFog(fog, gb, cam, env, pl.noise); compositeFog(fog, gb); const t3 = now(); ms.fog = t3 - t2;
+  integrateFog(fog, gb, cam, env, pl.noise); compositeFog(fog, gb);
+  if (pl.opts.autoExposure) { const avg = meter(pl.ae, gb.radiance, gb.w, gb.h, env.exposure); if (pl.ae.snap) { adapt(pl.ae, avg, 0); pl.ae.ev = pl.ae.target; pl.ae.snap = false; pl.ae.warm = 0.5; } else adapt(pl.ae, avg, dt); /* a new scene starts adapted */ pl.stats.exposure = pl.ae.ev; } // used from the next frame
+  const t3 = now(); ms.fog = t3 - t2;
   // ---- adaptive leaves, flow, glyphs ----
   subdivide(pl.qt, gb); const t4 = now(); ms.tree = t4 - t3;
   computeFlow(pl.flow, gb, cam, { noise: pl.noise, etfIterations: pl.opts.etfIterations }); const t5 = now(); ms.flow = t5 - t4;
