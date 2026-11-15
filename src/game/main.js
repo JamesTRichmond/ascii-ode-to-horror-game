@@ -215,8 +215,9 @@ async function boot() {
     G.atlasPx = { pixels: d.data, w: oc.width, h: oc.height, channels: 4 }; if (S().quality !== 'auto') S().quality = 'low'; }
   G.telemetryConfig = await loadTelemetryConfig();
   G.telemetry = createTelemetry({ version: VERSION, endpoint: G.telemetryConfig?.endpoint ?? null, getState: () => G.sim ? { chapter: G.chapter + 1, endless: G.endless, seed: G.runSeed, tick: G.sim.tick, hash: hashState(G.sim), log: G.log, tier: G.pl?.quality } : {} });
-  G.telemetry.install(report => crashed(report)); G.telemetry.track('session_start', { tier: S().quality, reducedMotion: !!S().reducedMotion, textScale: S().textScale });
-  G.input = createInput(canvas); G.input.onPause = pause; applySettings();
+  G.telemetry.install(report => crashed(report));
+  G.input = createInput(canvas); G.input.onPause = pause; applySettings(); // applies saved consent before the first event
+  G.telemetry.track('session_start', { tier: S().quality, reducedMotion: !!S().reducedMotion, textScale: S().textScale });
   if (!G.out) { canvas.width = G.pl.w * 2; canvas.height = G.pl.h * 2; const ctx = canvas.getContext('2d'); G.cpu = { ctx, img: ctx.createImageData(canvas.width, canvas.height) }; }
   if (matchMedia('(pointer: coarse)').matches) $('touch').hidden = false;
   addEventListener('keydown', e => { if (e.code === 'Escape' && G.mode === 'pause') resume(); });
