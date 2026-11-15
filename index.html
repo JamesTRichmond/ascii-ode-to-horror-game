@@ -12,13 +12,14 @@
   <div id="stage" aria-label="Game view. The scene is rendered as glyphs; all game state is also reported in the status panel.">
     <canvas id="view" width="1440" height="810"></canvas>
     <canvas id="debug" hidden></canvas>
+    <div id="vignette" aria-hidden="true"></div>
   </div>
   <section id="hud" aria-label="Status" hidden>
     <div class="hud-top">
-      <div class="panel" id="chapterPanel"><span class="kicker" id="chapterKicker"></span><strong id="chapterTitle"></strong><span id="objective"></span></div>
+      <div class="panel" id="chapterPanel"><span class="kicker" id="chapterKicker"></span><strong id="chapterTitle"></strong><span id="objective"></span><span id="resonance" aria-live="off"></span></div>
+      <div class="threat panel" id="threatPanel" hidden><span class="kicker" id="threatLabel">THREAT</span><div class="bar" role="progressbar" aria-labelledby="threatLabel" aria-valuemin="0" aria-valuemax="100" id="threatBar"><i></i></div></div>
       <div class="panel right" id="measurePanel"><span class="kicker">MEASURES</span><span id="measures" role="img"></span></div>
     </div>
-    <div class="threat panel" id="threatPanel" hidden><span class="kicker" id="threatLabel">THREAT</span><div class="bar" role="progressbar" aria-labelledby="threatLabel" aria-valuemin="0" aria-valuemax="100" id="threatBar"><i></i></div></div>
     <p id="caption" aria-live="polite"></p>
     <p id="alert" role="alert"></p>
     <div class="hud-bottom">

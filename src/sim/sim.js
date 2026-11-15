@@ -290,7 +290,7 @@ function stepEntity(s, e) {
 
 /** Advance one tick. `input` is a packed integer from packInput(). */
 export function step(s, input) {
-  if (s.c.dead || s.c.done) { s.tick++; return s; }
+  if (s.c.dead || s.c.done) return s; // frozen: time, best time and state hash stop at the moment of death or completion
   const ox = s.p.x;
   stepPlayer(s, input | 0);
   if (s.def.rule & RULE.MULTITUDE) { // voice, or walking against the flow beside a marcher, marks you

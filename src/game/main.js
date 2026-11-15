@@ -16,7 +16,7 @@ import { createAudio } from './audio.js';
 import { loadSave, storeSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 const U = CELL / 1024, $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
 const G = { mode: 'boot', chapter: 0, sim: null, prev: null, acc: 0, last: 0, pl: null, out: null, atlas: null, noise: null, atlasImage: null, atlasPx: null, save: loadSave(), log: [], seed: +(params.get('seed') || 100), bot: null, frames: [], switchRates: [], hud: createHud(), audio: createAudio(), input: null, bob: 0, hurtFlash: 0, cpu: null };
 const S = () => G.save.settings;
@@ -32,12 +32,16 @@ function applySettings() {
   root.style.setProperty('--scale', s.textScale); root.classList.toggle('contrast', !!s.contrast); root.classList.toggle('still', !!s.reducedMotion);
   G.audio.setVolume(s.volume); if (G.input) G.input.sensitivity = s.sensitivity; $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (!G.pl || G.pl.quality !== s.quality) { G.pl = createPipeline(G.atlas, G.noise, s.quality); if (G.sim) setScene(G.pl, G.sim); const d = $('debug'); d.width = G.pl.w; d.height = G.pl.h; }
-  G.pl.opts.reducedMotion = !!s.reducedMotion; storeSave(G.save);
+  G.pl.opts.reducedMotion = !!s.reducedMotion; G.hud.still = !!s.reducedMotion; storeSave(G.save);
 }
 function resize() { const c = $('view'), dpr = Math.min(2, devicePixelRatio || 1), w = Math.min(1920, Math.round(c.clientWidth * dpr)) || 1440; c.width = w; c.height = Math.round((w * 9) / 16); }
 
 // ---------------------------------------------------------------- chapter flow
+/** One pending death/completion transition, bound to the sim that raised it; any new session or the title cancels it. */
+function defer(fn, ms) { clearTimeout(G.pending); const sim = G.sim; G.pending = setTimeout(() => { G.pending = 0; if (G.sim === sim && (G.mode === 'play' || G.mode === 'pause')) fn(); }, ms); }
+function cancelDeferred() { clearTimeout(G.pending); G.pending = 0; }
 function startChapter(index, restored = null) {
+  cancelDeferred();
   G.chapter = index; G.sim = restored || createSim(index, G.seed + index); G.prev = snapshot(G.sim); G.acc = 0; G.log = []; G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
   setScene(G.pl, G.sim); G.hud.setChapter(G.sim.def, CHAPTERS.length); G.hud.closeMenu(); G.hud.show(true); G.mode = 'play'; G.input.enabled = true; G.input.reset();
   if (!restored) G.hud.caption(STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
@@ -45,12 +49,12 @@ function startChapter(index, restored = null) {
 }
 function pause() {
   if (G.mode !== 'play') return; G.mode = 'pause'; G.input.enabled = false; document.exitPointerLock?.();
-  G.hud.menu('PAUSED', `<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Restart chapter', action: () => startChapter(G.chapter) }, { label: 'Save and quit to title', action: () => { G.save.checkpoint = { chapter: G.chapter, state: Array.from(serialize(G.sim)) }; storeSave(G.save); title(); } }], 'ODE');
+  G.hud.menu('PAUSED', `<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Restart chapter', action: () => startChapter(G.chapter) }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
 }
 const pause0 = () => { G.mode = 'play'; pause(); };
 function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; G.input.reset(); G.last = 0; }
 function title() {
-  G.mode = 'title'; G.input.enabled = false; G.hud.show(false); const cp = G.save.checkpoint;
+  cancelDeferred(); G.mode = 'title'; G.input.enabled = false; G.hud.show(false); G.audio.silence?.(); const cp = G.save.checkpoint;
   G.hud.menu('ODE', `<p class="stanza">We are the music makers,\nAnd we are the dreamers of dreams…</p><p>A horror in nine stanzas, after Arthur O'Shaughnessy. Rendered entirely in glyphs.</p>`, [
     { label: 'Begin', primary: !cp, action: () => startChapter(0) },
     { label: 'Continue', primary: !!cp, disabled: !cp, action: () => { try { startChapter(cp.chapter, deserialize(Int32Array.from(cp.state))); } catch { startChapter(cp.chapter); } } },
@@ -94,7 +98,7 @@ function present(e) {
     case 'measure': burst(pl, x, 1.2, z, 40, 3.5, CY, 1.1); hud.alert(`A MEASURE RETURNS · ${e.a}/${def.need}`); hud.caption(STANZAS[def.id - 1].slice(2 + e.a * 2 - 2, 2 + e.a * 2 + 2).slice(0, 2)); break;
     case 'hum': burst(pl, x + Math.cos(pl.cam.yaw) * 0.8, 1.2, z + Math.sin(pl.cam.yaw) * 0.8, 5, 1.6, CY, 0.9, pl.cam.yaw); break;
     case 'chord': pl.flash = 1; burst(pl, x + Math.cos(pl.cam.yaw), 1.3, z + Math.sin(pl.cam.yaw), 70, 9, CY, 0.8, pl.cam.yaw); break;
-    case 'hurt': G.hurtFlash = 1; burst(pl, x, 1.2, z, 14, 2, RED, 0.5); hud.alert('YOU ARE BEING UNWRITTEN', 1.2); break;
+    case 'hurt': G.hurtFlash = 1; hud.pain(); burst(pl, x, 1.2, z, 14, 2, RED, 0.5); hud.alert('YOU ARE BEING UNWRITTEN', 1.2); break;
     case 'unwritten': burst(pl, x, 1.2, z, 90, 3, PALE, 1.4); hud.alert('UNWRITTEN', 1.2); break;
     case 'stagger': burst(pl, x, 1.4, z, 22, 2.5, PALE, 0.7); break;
     case 'gate': hud.alert('THE WAY OPENS', 3); hud.caption(STANZAS[def.id - 1].slice(6)); break;
@@ -111,8 +115,8 @@ function present(e) {
     case 'relight': hud.alert('THE FLAME RETURNS', 1.5); break;
     case 'gasp': hud.alert('YOU GASP', 1.2); break;
     case 'wake': burst(pl, x, 0.6, z, 20, 1.5, GOLDC, 1.2); hud.alert('THE SLEEPER STIRS', 1.2); break;
-    case 'death': burst(pl, x, 1.2, z, 120, 4, PALE, 1.6); setTimeout(died, S().reducedMotion ? 300 : 1400); break;
-    case 'complete': setTimeout(completed, 500); break;
+    case 'death': burst(pl, x, 1.2, z, 120, 4, PALE, 1.6); defer(died, S().reducedMotion ? 300 : 1400); break;
+    case 'complete': defer(completed, 500); break;
     default: break;
   }
 }
@@ -137,7 +141,7 @@ function frame(t) {
   if (G.out) G.out.draw(G.pl.sel.inst, G.pl.sel.count, G.pl.w, G.pl.h, bg);
   else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx); c.ctx.putImageData(c.img, 0, 0); }
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
-  G.hud.update(G.sim, elapsed, S().captions); G.audio.update(G.sim, G.pl, elapsed);
+  G.hud.update(G.sim, elapsed, S().captions); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
   // rolling statistics
   const total = performance.now() - simT0; G.frames.push(total); if (G.frames.length > 240) G.frames.shift(); G.switchRates.push(G.pl.sel.stats.switchRate); if (G.switchRates.length > 240) G.switchRates.shift();
   if (S().stats && (t | 0) % 6 === 0) { const f = [...G.frames].sort((a, b) => a - b), sw = [...G.switchRates].sort((a, b) => a - b), ms = G.pl.stats.ms, q = (a, p) => a[Math.min(a.length - 1, Math.floor(a.length * p))] || 0;

@@ -15,6 +15,7 @@ export function createHud() {
   hud.show = on => { $('hud').hidden = !on; };
   hud.setChapter = (def, total) => { $('chapterKicker').textContent = `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
   hud.caption = (lines, seconds = 3.2) => { for (const l of [].concat(lines)) hud.captionQueue.push([l, seconds]); };
+  hud.pain = () => { hud.hurt = 0.8; };
   hud.alert = (text, seconds = 2.4) => { $('alert').textContent = text; hud.alertTimer = seconds; };
 
   hud.update = (sim, dt, captions = true) => {
@@ -37,12 +38,26 @@ export function createHud() {
     if (!voiced) tags.push(['warn', '∅ VOICELESS']);
     set($('tags'), 'tags', tags.map(t => t[1]).join('|'), el => { el.innerHTML = tags.map(([k, t]) => `<span class="tag ${k}">${esc(t)}</span>`).join(''); });
     // nearest threat: always-visible proximity meter with a name
-    let best = null, bd = 1e9; for (const e of sim.ents) { if (e.mode === 9 || (e.type === ET.HUSK && e.mode === 0) || (e.type === ET.MARCHER && !p.marked)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
+    let best = null, bd = 1e9; for (const e of sim.ents) { if (e.mode === 9 || (e.type === ET.HUSK && e.mode === 0) || (e.type === ET.MARCHER && !p.marked) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && c.phase !== 1)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
     const show = !!best && bd < 12 * 1024; set($('threatPanel'), 'thr', show, (el, v) => { el.hidden = !v; });
     if (show) {
       const sl = best.type === ET.SLUMBERER; set($('threatLabel'), 'thl', best.type + ':' + best.mode + (sl ? c.sing : ''), el => { el.textContent = sl ? 'THE SLUMBERER · WAKING' : NAMES[best.type] + (best.mode === 8 ? ' · STAGGERED' : best.mode === 1 ? ' · HUNTING' : ' · NEAR'); });
       bar('threatBar', sl ? (c.sing / TUNE.slumberHum) * 100 : Math.max(0, 100 - (bd / (12 * 1024)) * 100));
     }
+    // resonance: while humming, the voice finds the nearest unclaimed measure, unlit brazier or open gate
+    let res = '';
+    if (p.hum) {
+      let tx = 0, tz = 0, bd2 = Infinity;
+      const consider = (x, z) => { const d2 = (x - p.x) ** 2 + (z - p.z) ** 2; if (d2 < bd2) { bd2 = d2; tx = x; tz = z; } };
+      for (const m of sim.picks) if (!m.taken) consider(m.x, m.z);
+      for (let i = 0; i < sim.tiles.length; i++) { const t = sim.tiles[i]; if ((t === 66 && !sim.dyn[i] && def.rule & 16) || (t === 88 && c.gateOpen)) consider((i % sim.w) * 1024 + 512, ((i / sim.w) | 0) * 1024 + 512); }
+      if (bd2 < Infinity) { const bearing = Math.atan2(tz - p.z, tx - p.x) - (p.ang / 4096) * Math.PI * 2, rel = Math.round((((bearing / (Math.PI * 2)) % 1) + 1) % 1 * 8) % 8; res = `♪ ${['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'][rel]} ${Math.round((Math.sqrt(bd2) / 1024) * 2)} m`; }
+    }
+    set($('resonance'), 'res', res, (el, v) => { el.textContent = v; });
+    hud.hurt = Math.max(0, (hud.hurt || 0) - dt * 1.6);
+    const low = p.hp < 35 ? 0.35 + (hud.still ? 0 : 0.15 * Math.sin(performance.now() / 260)) : 0;
+    const hurt = Math.max(hud.still ? (hud.hurt > 0 ? 0.6 : 0) : hud.hurt, low); // reduced motion: on or off, never a fade
+    set($('vignette'), 'vig', hurt.toFixed(2), (el, v) => { el.style.opacity = v; });
     if (hud.alertTimer > 0 && (hud.alertTimer -= dt) <= 0) $('alert').textContent = '';
     if (hud.captionTimer > 0) { if ((hud.captionTimer -= dt) <= 0) $('caption').textContent = ''; }
     else if (hud.captionQueue.length && captions) { const [text, secs] = hud.captionQueue.shift(); $('caption').textContent = text; hud.captionTimer = secs; }
