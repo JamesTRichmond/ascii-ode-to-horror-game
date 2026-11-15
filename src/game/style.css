@@ -62,3 +62,6 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
 #vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(120, 8, 4, .55) 100%); }
 #resonance { color: var(--cyan); letter-spacing: .08em; }
 #resonance:empty { display: none; }
+#igt { font-variant-numeric: tabular-nums; color: var(--ink); letter-spacing: .04em; white-space: nowrap; } #igt:empty { display: none; }
+#igt.ahead, .splits .ahead td { color: #7ee08a; } #igt.behind, .splits .behind td { color: var(--red); } #igt.gold, .splits .gold td { color: var(--gold); }
+.splits { border-collapse: collapse; font-variant-numeric: tabular-nums; } .splits th, .splits td { text-align: left; padding: 1px 10px 1px 0; font-weight: 400; } .splits thead th { color: var(--dim); }
