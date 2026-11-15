@@ -38,7 +38,7 @@ export function createHud() {
     if (!voiced) tags.push(['warn', '∅ VOICELESS']);
     set($('tags'), 'tags', tags.map(t => t[1]).join('|'), el => { el.innerHTML = tags.map(([k, t]) => `<span class="tag ${k}">${esc(t)}</span>`).join(''); });
     // nearest threat: always-visible proximity meter with a name
-    let best = null, bd = 1e9; for (const e of sim.ents) { if (e.mode === 9 || (e.type === ET.HUSK && e.mode === 0) || (e.type === ET.MARCHER && !p.marked)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
+    let best = null, bd = 1e9; for (const e of sim.ents) { if (e.mode === 9 || (e.type === ET.HUSK && e.mode === 0) || (e.type === ET.MARCHER && !p.marked) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && c.phase !== 1)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
     const show = !!best && bd < 12 * 1024; set($('threatPanel'), 'thr', show, (el, v) => { el.hidden = !v; });
     if (show) {
       const sl = best.type === ET.SLUMBERER; set($('threatLabel'), 'thl', best.type + ':' + best.mode + (sl ? c.sing : ''), el => { el.textContent = sl ? 'THE SLUMBERER · WAKING' : NAMES[best.type] + (best.mode === 8 ? ' · STAGGERED' : best.mode === 1 ? ' · HUNTING' : ' · NEAR'); });
@@ -54,7 +54,9 @@ export function createHud() {
       if (bd2 < Infinity) { const bearing = Math.atan2(tz - p.z, tx - p.x) - (p.ang / 4096) * Math.PI * 2, rel = Math.round((((bearing / (Math.PI * 2)) % 1) + 1) % 1 * 8) % 8; res = `♪ ${['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'][rel]} ${Math.round((Math.sqrt(bd2) / 1024) * 2)} m`; }
     }
     set($('resonance'), 'res', res, (el, v) => { el.textContent = v; });
-    const hurt = Math.max(hud.hurt = Math.max(0, (hud.hurt || 0) - dt * 1.6), p.hp < 35 ? 0.35 + (hud.still ? 0 : 0.15 * Math.sin(performance.now() / 260)) : 0);
+    hud.hurt = Math.max(0, (hud.hurt || 0) - dt * 1.6);
+    const low = p.hp < 35 ? 0.35 + (hud.still ? 0 : 0.15 * Math.sin(performance.now() / 260)) : 0;
+    const hurt = Math.max(hud.still ? (hud.hurt > 0 ? 0.6 : 0) : hud.hurt, low); // reduced motion: on or off, never a fade
     set($('vignette'), 'vig', hurt.toFixed(2), (el, v) => { el.style.opacity = v; });
     if (hud.alertTimer > 0 && (hud.alertTimer -= dt) <= 0) $('alert').textContent = '';
     if (hud.captionTimer > 0) { if ((hud.captionTimer -= dt) <= 0) $('caption').textContent = ''; }

@@ -11,7 +11,8 @@ try { const v = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(
 delete PROD_HEADERS['Cache-Control'];
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.bin': 'application/octet-stream', '.svg': 'image/svg+xml' };
 http.createServer((req, res) => {
-  const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname), file = path.join(root, rel.endsWith('/') ? rel + 'index.html' : rel);
-  if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
+  let rel; try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400).end(); return; }
+  const file = path.join(root, rel.endsWith('/') ? rel + 'index.html' : rel), inside = path.relative(root, file);
+  if (inside.startsWith('..') || path.isAbsolute(inside)) { res.writeHead(403).end(); return; } // by path segments, so a sibling named root-* is outside
   fs.readFile(file, (err, data) => { if (err) { res.writeHead(404).end('not found'); return; } res.writeHead(200, { ...PROD_HEADERS, 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' }).end(data); });
 }).listen(port, () => console.log(`ODE: http://localhost:${port}/`));
