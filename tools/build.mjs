@@ -4,7 +4,8 @@
 //   2. statically resolves every ES-module import in dist/ and fails on a missing file
 //   3. writes dist/version.json (version, commit, build time, sha256 of every file)
 //   4. packs release/ode-<version>.tar.gz
-// The build is reproducible: timestamps come from SOURCE_DATE_EPOCH or the commit time.
+// The build is reproducible: timestamps come from SOURCE_DATE_EPOCH or the commit time; the archive normalises
+// order, ownership and permission bits, so the builder's umask does not change the checksum.
 // Usage: node tools/build.mjs [--no-pack]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,7 +49,7 @@ console.log(`dist/: ${files.length + 1} files, ${(bytes / 1024).toFixed(0)} KiB,
 if (!process.argv.includes('--no-pack')) {
   const rel = path.join(root, 'release'); fs.mkdirSync(rel, { recursive: true });
   const out = path.join(rel, `ode-${pkg.version}.tar.gz`);
-  const tarball = execFileSync('tar', ['--sort=name', `--mtime=@${epoch}`, '--owner=0', '--group=0', '--numeric-owner', '-cf', '-', '-C', dist, '.'], { maxBuffer: 1 << 28 });
+  const tarball = execFileSync('tar', ['--sort=name', `--mtime=@${epoch}`, '--owner=0', '--group=0', '--numeric-owner', '--mode=u=rwX,go=rX', '-cf', '-', '-C', dist, '.'], { maxBuffer: 1 << 28 });
   fs.writeFileSync(out, zlib.gzipSync(tarball, { level: 9 })); // node's gzip header carries no timestamp
   const sha = crypto.createHash('sha256').update(fs.readFileSync(out)).digest('hex');
   fs.writeFileSync(out + '.sha256', `${sha}  ${path.basename(out)}\n`);
