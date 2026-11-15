@@ -6,7 +6,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 #app { position: fixed; inset: 0; display: grid; place-items: center; }
 #stage { position: absolute; inset: 0; display: grid; place-items: center; }
 #view, #debug { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--bg); grid-area: 1 / 1; }
-#debug { image-rendering: pixelated; }
+#debug { image-rendering: pixelated; pointer-events: none; } /* overlay only: clicks reach #view for pointer lock */
 #hud { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(6px, 1.5vw, 18px); }
 .hud-top, .hud-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
 .hud-top { align-items: flex-start; }
