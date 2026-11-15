@@ -45,13 +45,13 @@ try {
     await p.click('text=Begin'); await p.waitForTimeout(800); await p.keyboard.down('KeyW'); await p.waitForTimeout(800); await p.keyboard.up('KeyW');
     await p.keyboard.press('Escape'); await p.waitForTimeout(200); const paused = await p.$eval('#menuTitle', e => e.textContent).catch(() => null);
     const tabs = []; for (let i = 0; i < 6; i++) { await p.keyboard.press('Tab'); tabs.push(await p.evaluate(() => document.activeElement?.textContent)); }
-    await p.click('text=Settings'); await p.selectOption('select[data-k="reducedMotion"]', 'true'); await p.click('text=Done'); await p.click('text=Resume'); await p.waitForTimeout(500);
+    await p.click('text=Settings'); const selects = await p.$$eval('#menu select', ss => ss.map(e => ({ k: e.dataset.k, options: e.options.length, stray: /<\/?option/.test(e.parentElement.textContent) }))); await p.selectOption('select[data-k="reducedMotion"]', 'true'); await p.click('text=Done'); await p.click('text=Resume'); await p.waitForTimeout(500);
     const st = await p.evaluate(() => ({ mode: __ode.G.mode, audio: __ode.G.audio.ctx?.state ?? 'none', reducedMotion: __ode.G.pl.opts.reducedMotion }));
     // every simulation event must reach the presentation layer (audio, HUD, effects, death/completion flow): force chords
     await p.goto(base + '?chapter=2&quality=low'); await p.waitForFunction(() => globalThis.__ode?.G.sim); await p.waitForTimeout(500);
     await p.evaluate(() => { const G = __ode.G, ev = G.audio.event; G.__presented = 0; G.audio.event = e => { G.__presented++; ev(e); }; G.input.poll = () => 128; });
     await p.waitForTimeout(1500); const events = await p.evaluate(() => ({ presented: __ode.G.__presented, pending: __ode.G.sim.events.length }));
-    report.ui = { title, paused, focusCycle: tabs, ...st, events, errors: errs }; await p.close(); }
+    report.ui = { title, paused, focusCycle: tabs, selects, ...st, events, errors: errs }; await p.close(); }
   { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
     await p.goto(`${base}?endless=7&depth=2&autoplay=1&quality=low`); await p.waitForTimeout(3000);
     const e = await p.evaluate(() => ({ kicker: document.getElementById('chapterKicker').textContent, mode: __ode.G.mode, tick: __ode.G.sim.tick }));
@@ -97,7 +97,7 @@ try {
   }
 } finally { await browser.close(); server.kill(); }
 const PAUSE_MENU = new Set(['Resume', 'Settings', 'Photo mode', 'Restart chapter', 'Save and quit to title']);
-const uiOk = !!report.ui && report.ui.paused === 'PAUSED' && report.ui.mode === 'play' && !report.ui.errors.length
+const uiOk = !!report.ui && report.ui.selects.length > 0 && report.ui.selects.every(x => x.options >= 2 && !x.stray) /* every settings dropdown has real <option>s, none shown as text */ && report.ui.paused === 'PAUSED' && report.ui.mode === 'play' && !report.ui.errors.length
   && report.ui.audio === 'running' && report.ui.reducedMotion === true && report.ui.events.presented > 0 && report.ui.events.pending === 0 && report.ui.focusCycle.length > 0 && report.ui.focusCycle.every(t => PAUSE_MENU.has(t));
 const SEC_CARDS = ['ODE', 'HOW TO PLAY', 'SETTINGS', 'CHAPTERS', 'ENDLESS CHOIR', 'PAUSED', 'UNWRITTEN', 'YOU SING', 'VERSE 2', 'SOMETHING BROKE'];
 const sec = report.security, secOk = !!sec && sec.trustedTypes === true && !sec.violations.length && sec.rejected === 0 && sec.accepted >= new Set(sec.cards.filter(Boolean)).size && !sec.errors.length

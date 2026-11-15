@@ -6,6 +6,7 @@
 import * as local from './pipeline.js';
 import { QUALITY } from './pipeline.js';
 import { serialize } from '../sim/sim.js';
+import { scriptURL } from '../game/safe-html.js';
 export { QUALITY };
 
 const C = { mode: 'local', worker: null, ready: null, raw: null, onError: null, nextId: 1 };
@@ -20,7 +21,7 @@ export const rendererMode = () => C.mode;
 /** After a worker crash: discard it; the next pipeline spawns a fresh one. */
 export function restartWorker() { if (C.worker) { C.worker.terminate(); C.worker = null; C.ready = null; } }
 function spawn() {
-  if (C.worker) return; const w = C.worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+  if (C.worker) return; const w = C.worker = new Worker(scriptURL(new URL('./worker.js', import.meta.url)), { type: 'module' });
   C.ready = new Promise(res => { w.onmessage = e => { if (e.data.type === 'ready') { res(); return; } try { route(e.data); } catch (err) { C.onError?.({ message: String(err?.message || err), stack: String(err?.stack || '') }); } }; }); // a fault while applying a result is a crash like any other, never an uncaught error
   w.onerror = e => { C.onError?.({ message: e.message || 'render worker failed', stack: `${e.filename || ''}:${e.lineno || ''}` }); };
   w.postMessage({ type: 'init', glyphs: C.raw.glyphs.slice(0), noise: C.raw.noise.slice(0) });

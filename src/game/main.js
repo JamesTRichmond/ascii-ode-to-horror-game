@@ -23,7 +23,7 @@ import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
 import { createAutoQuality, sampleFrame } from './quality.js';
 import { createTelemetry, loadTelemetryConfig, INPUT_CAP } from './telemetry.js';
 import { endlessVerse, weeklySeed, MOD_INFO, modNames } from '../sim/endless.js';
-import { html, setHTML, htmlStats, trustedTypesEnforced } from './safe-html.js';
+import { html, setHTML, htmlStats, trustedTypesEnforced, scriptURL } from './safe-html.js';
 import { encodeSeed, decodeSeed } from '../sim/seedcode.js';
 import { epilogueDef, EPILOGUE, EPILOGUE_TITLE, EPILOGUE_OPENING, EPILOGUE_CLOSING } from '../sim/epilogue.js';
 
@@ -136,7 +136,7 @@ async function checkForUpdate() {
     const v = await r.json(); G.deployed = v;
     // offline play: only production builds (whose version.json lists their files) install the service worker, so a
     // source checkout under development is never served stale modules from a cache
-    if (v.files && 'serviceWorker' in navigator && !params.has('nosw')) navigator.serviceWorker.register('sw.js').catch(e => console.info('offline cache unavailable:', e.message)); return v.version !== VERSION ? v.version : null;
+    if (v.files && 'serviceWorker' in navigator && !params.has('nosw')) navigator.serviceWorker.register(scriptURL('sw.js')).catch(e => console.info('offline cache unavailable:', e.message)); return v.version !== VERSION ? v.version : null;
   } catch { return null; }
 }
 function title() {
@@ -175,26 +175,26 @@ function helpMenu() {
 function settingsMenu(back) {
   const s = S(), opt = (v, cur, t) => html`<option value="${v}" ${String(cur) === String(v) ? html`selected` : ''}>${t}</option>`;
   const m = G.hud.menu('SETTINGS', html`
-    <label>Render quality <select data-k="quality">${opt('auto', s.quality, 'auto (adapts to this machine)')}${Object.keys(QUALITY).map(q => opt(q, s.quality, `${q} (${QUALITY[q][0]}×${QUALITY[q][1]})`)).join('')}</select></label>
+    <label>Render quality <select data-k="quality">${opt('auto', s.quality, 'auto (adapts to this machine)')}${Object.keys(QUALITY).map(q => opt(q, s.quality, `${q} (${QUALITY[q][0]}×${QUALITY[q][1]})`))}</select></label>
     <label>Render thread <select data-k="renderThread">${opt('worker', s.renderThread || 'worker', 'worker (frees the main thread)')}${opt('local', s.renderThread, 'main thread')}</select></label>
     <label>Eye adaptation <select data-k="eyeAdaptation">${opt(true, s.eyeAdaptation !== false, 'on')}${opt(false, s.eyeAdaptation !== false, 'off')}</select></label>
     <label>Reduced motion <select data-k="reducedMotion">${opt(false, s.reducedMotion, 'off')}${opt(true, s.reducedMotion, 'on')}</select></label>
-    <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%')).join('')}</select></label>
-    <label>Colour vision <select data-k="cvd">${[['off', 'standard'], ['protan', 'protanopia (red-weak)'], ['deutan', 'deuteranopia (green-weak)'], ['tritan', 'tritanopia (blue-weak)']].map(([v, t]) => opt(v, s.cvd || 'off', t)).join('')}</select></label>
+    <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%'))}</select></label>
+    <label>Colour vision <select data-k="cvd">${[['off', 'standard'], ['protan', 'protanopia (red-weak)'], ['deutan', 'deuteranopia (green-weak)'], ['tritan', 'tritanopia (blue-weak)']].map(([v, t]) => opt(v, s.cvd || 'off', t))}</select></label>
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
     <label>Captions <select data-k="captions">${opt(true, s.captions, 'on')}${opt(false, s.captions, 'off')}</select></label>
     <label>Sound captions (direction and distance) <select data-k="soundCaptions">${opt(false, !!s.soundCaptions, 'off')}${opt(true, !!s.soundCaptions, 'on')}</select></label>
     <label>Spatial audio <select data-k="spatial">${opt('binaural', s.spatial || 'binaural', 'binaural 3D (headphones)')}${opt('stereo', s.spatial, 'stereo (speakers)')}</select></label>
     <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-k="volume"></label>
     <label>Controller vibration <select data-k="vibration">${opt(true, s.vibration !== false, 'on')}${opt(false, s.vibration !== false, 'off')}</select></label>
-    <label>Game speed (assist) <select data-k="speed">${[1, 0.85, 0.7, 0.5].map(v => opt(v, s.speed ?? 1, v === 1 ? '100% (standard)' : `${v * 100}%`)).join('')}</select></label>
+    <label>Game speed (assist) <select data-k="speed">${[1, 0.85, 0.7, 0.5].map(v => opt(v, s.speed ?? 1, v === 1 ? '100% (standard)' : `${v * 100}%`))}</select></label>
     <label>Hum and hold breath <select data-k="toggleVoice">${opt(false, !!s.toggleVoice, 'hold the key')}${opt(true, !!s.toggleVoice, 'press to toggle')}</select></label>
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
     <label>Ghost of your best run <select data-k="ghost">${opt(true, s.ghost !== false, 'on')}${opt(false, s.ghost !== false, 'off')}</select></label>
     <label>Speedrun timer and splits <select data-k="speedrun">${opt(false, !!s.speedrun, 'off')}${opt(true, !!s.speedrun, 'on')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
-    <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs')).join('')}</select></label>`,
+    <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs'))}</select></label>`,
   [{ label: 'Done', primary: true, action: back }, { label: 'Controls', action: () => controlsMenu(back) }, { label: 'Copy diagnostic report', action: copyDiagnostics }, { label: 'Transfer save', action: () => transferMenu(back) }], 'ODE');
   m.onchange = e => { const k = e.target.dataset.k; if (!k) return; const v = e.target.value; S()[k] = v === 'true' ? true : v === 'false' ? false : e.target.type === 'range' || k === 'textScale' || k === 'speed' ? +v : v; applySettings(); };
 }
