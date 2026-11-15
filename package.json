@@ -19,6 +19,7 @@
     "balance": "node tools/balance.mjs",
     "replay": "node tools/replay.mjs",
     "hotfix": "node tools/hotfix.mjs",
-    "icons": "node tools/make-icons.mjs"
+    "icons": "node tools/make-icons.mjs",
+    "fuzz": "node tools/fuzz.mjs"
   }
 }
