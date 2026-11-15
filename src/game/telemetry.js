@@ -39,7 +39,7 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
     const st = getState?.() || {};
     const report = {
       schema: TELEMETRY_SCHEMA, kind: 'crash', origin, version, session: T.session, at: new Date().toISOString(),
-      message: String(error?.message || error).slice(0, 500),
+      message: String(error?.message || error).replace(/https?:\/\/[^/\s)]+/g, '').slice(0, 500), // origins stripped, as in the stack
       stack: String(error?.stack || '').split('\n').slice(0, 12).map(l => l.replace(/https?:\/\/[^/\s)]+/g, '')).join('\n'),
       chapter: st.chapter ?? null, endless: st.endless ?? null, seed: st.seed ?? null, tick: st.tick ?? null, hash: st.hash ?? null,
       // replay baseline: base = { tick, state } (serialized sim) when the log does not start at tick 0 (a restored
@@ -61,9 +61,16 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
   return T;
 }
 
+/** Accepted collector endpoints: a root-relative same-origin path ('/api/telemetry'), or an absolute https URL
+ *  (an external collector also needs its origin in the CSP connect-src; docs/LIVE_OPS.md §1). A protocol-relative
+ *  '//host' (or '/\\host') is rejected: it looks like a path but resolves to another origin. */
+export function allowedEndpoint(endpoint) {
+  if (/^\/(?![\/\\])/.test(endpoint)) return true;
+  try { return new URL(endpoint).protocol === 'https:'; } catch { return false; }
+}
 /** Read optional endpoint configuration shipped next to the game. Absent → telemetry can never send. */
 export async function loadTelemetryConfig() {
-  try { const r = await fetch('telemetry.json', { cache: 'no-store' }); if (!r.ok) return null; const c = await r.json(); return typeof c.endpoint === 'string' && /^\/|^https:\/\//.test(c.endpoint) ? c : null; } catch { return null; }
+  try { const r = await fetch('telemetry.json', { cache: 'no-store' }); if (!r.ok) return null; const c = await r.json(); return typeof c.endpoint === 'string' && allowedEndpoint(c.endpoint) ? c : null; } catch { return null; }
 }
 
 /** Browser family only; 'other' when there is no navigator (Node 20 and earlier) or no recognisable agent. */
