@@ -22,6 +22,7 @@
     "icons": "node tools/make-icons.mjs",
     "fuzz": "node tools/fuzz.mjs",
     "optimize:hero": "node tools/optimize-hero.mjs",
-    "goldens": "node tools/goldens.mjs"
+    "goldens": "node tools/goldens.mjs",
+    "bench": "node tools/bench.mjs"
   }
 }

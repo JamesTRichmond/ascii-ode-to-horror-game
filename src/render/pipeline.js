@@ -122,7 +122,10 @@ export function renderFrame(pl, view, dt) {
   pl.stats.tris = tris; const t1 = now(); ms.gbuffer = t1 - t0;
   // ---- transported light ----
   const T = TEXELS_PER_CELL, tm = CELL / T; c.emit.fill(0);
-  for (let z = 0; z < world.h; z++) for (let x = 0; x < world.w; x++) { const s = world.floorH[z * world.w + x] > 1.6 ? 1 : 0; for (let j = 0; j < T; j++) c.solid.fill(s, (z * T + j) * c.tw + x * T, (z * T + j) * c.tw + x * T + T); }
+  if (world.dirty || c.solidFor !== world) { // occupancy only changes with the world (walls rising, gates, phases)
+    for (let z = 0; z < world.h; z++) for (let x = 0; x < world.w; x++) { const s = world.floorH[z * world.w + x] > 1.6 ? 1 : 0; for (let j = 0; j < T; j++) c.solid.fill(s, (z * T + j) * c.tw + x * T, (z * T + j) * c.tw + x * T + T); }
+    c.solidFor = world;
+  }
   const p = sim.p; pl.humLevel += ((p.hum ? 1 : 0) - pl.humLevel) * Math.min(1, dt * 6); pl.flash *= Math.exp(-dt / 0.35);
   const hum = pl.humLevel * (1.5 + 0.35 * Math.sin(time * 9)) + pl.flash * 6;
   addEmitter(c, view.x, view.z, 1.2, [0.12 + 0.5 * hum, 0.14 + 1.3 * hum, 0.16 + 1.2 * hum], tm); // the singer always carries a faint presence

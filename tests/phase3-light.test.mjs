@@ -98,3 +98,10 @@ test('chapter 8: the shade drawn on the ground is exactly the shelter the dawn r
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) { if (solidAt(sim, x, z)) continue; cells++; const drawn = pl.shadow[(z * T + 2) * tw + x * T + 2] === 0, rule = inShade(sim, x, z); if (drawn) shaded++; if (drawn !== rule) mismatch++; }
   t.diagnostic(`${cells} open cells, ${shaded} drawn in shade, ${mismatch} disagreements`); assert.equal(mismatch, 0); assert.ok(shaded > 20);
 });
+
+test('fog-body binning is exact: fogDensity is bit-identical with and without the column grid', async () => {
+  const { binFogBodies } = await import('../src/render/light.js');
+  const fog = { sigma: 0.03, height: 4, blobs: [] }; for (let b = 0; b < 24; b++) fog.blobs.push(Math.sin(b * 3.1) * 30, 1 + (b % 3), Math.cos(b * 1.7) * 25, 1.5 + (b % 5), 0.05 + (b % 4) * 0.02);
+  const plain = { ...fog, blobGrid: null }; binFogBodies(fog); assert.ok(fog.blobGrid && fog.blobGrid.list.length > 0);
+  for (let i = 0; i < 20000; i++) { const x = ((i * 7.31) % 80) - 40, y = (i * 0.37) % 6, z = ((i * 3.77) % 70) - 35, t = i * 0.01; assert.equal(fogDensity(fog, x, y, z, t), fogDensity(plain, x, y, z, t)); }
+});
