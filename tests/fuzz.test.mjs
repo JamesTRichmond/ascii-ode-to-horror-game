@@ -14,9 +14,9 @@ test('the invariant checker catches a planted violation', () => {
   const s = createSim(0, 1); s.p.hp = 101; assert.match(checkInvariants(s).join(), /hp 101/);
   const t = createSim(0, 1); t.p.x = -5; assert.match(checkInvariants(t).join(), /outside/);
 });
-for (const [i, c] of CHAPTERS.entries()) test(`fuzz chapter ${c.id}: 12 programs x 1500 ticks keep every invariant and restore exactly`, () => {
+for (const [i, c] of CHAPTERS.entries()) test(`fuzz chapter ${c.id}: 12 programs x 1500 ticks keep every invariant and restore exactly`, t => {
   let ended = 0; for (let seed = 1; seed <= 12; seed++) { const r = fuzzRun(i, seed, 1500); assert.ok(r.ok, `seed ${seed}: ${r.violations?.join('; ')}`); if (r.dead || r.done) ended++; }
-  test.diagnostic?.(`chapter ${c.id}: ${ended}/12 programs ended in death or exit`);
+  t.diagnostic(`chapter ${c.id}: ${ended}/12 programs ended in death or exit`);
 });
 test('fuzz Endless verses (seed 7, depths 1-6): 6 programs x 1500 ticks each', () => {
   for (let d = 1; d <= 6; d++) for (let seed = 1; seed <= 6; seed++) { const r = fuzzRun(endlessVerse(7, d), seed, 1500); assert.ok(r.ok, `depth ${d} seed ${seed}: ${r.violations?.join('; ')}`); }
