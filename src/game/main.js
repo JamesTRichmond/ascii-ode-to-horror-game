@@ -13,7 +13,7 @@ import { viewOf, snapshot } from './view.js';
 import { createInput } from './input.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
-import { loadSave, storeSave } from './save.js';
+import { loadSave, storeSave, exportSave, importSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
 import { createAutoQuality, sampleFrame } from './quality.js';
 import { createTelemetry, loadTelemetryConfig, INPUT_CAP } from './telemetry.js';
@@ -118,7 +118,7 @@ function settingsMenu(back) {
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
     <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs')).join('')}</select></label>`,
-  [{ label: 'Done', primary: true, action: back }, { label: 'Copy diagnostic report', action: copyDiagnostics }], 'ODE');
+  [{ label: 'Done', primary: true, action: back }, { label: 'Copy diagnostic report', action: copyDiagnostics }, { label: 'Transfer save', action: () => transferMenu(back) }], 'ODE');
   m.onchange = e => { const k = e.target.dataset.k; if (!k) return; const v = e.target.value; S()[k] = v === 'true' ? true : v === 'false' ? false : e.target.type === 'range' || k === 'textScale' ? +v : v; applySettings(); };
 }
 /** Copy a report from the open dialog. Status is announced inside the dialog; if the clipboard is unavailable or
@@ -131,6 +131,24 @@ async function copyFromDialog(text, done) {
     let box = card.querySelector('textarea[data-report]'); if (!box) { box = document.createElement('textarea'); box.readOnly = true; box.rows = 8; box.dataset.report = ''; box.setAttribute('aria-label', 'Report text'); card.insertBefore(box, nav); }
     box.value = text; status.textContent = 'Copying was blocked. The report is selected below: copy it with Ctrl+C (Cmd+C on a Mac).'; box.focus(); box.select();
   }
+}
+/** Move progress between browsers or devices: a copyable code or a file out; a pasted code or a file in. */
+function transferMenu(back) {
+  const code = exportSave(G.save);
+  const m = G.hud.menu('TRANSFER SAVE', `<p>Your progress as a save code. Copy it or download it, then import it on another browser or device.</p><textarea readonly rows="4" aria-label="Your save code" data-export>${code}</textarea>
+    <label>Import a save code <textarea rows="3" data-import spellcheck="false" placeholder="ODE1...."></textarea></label><label>…or a save file <input type="file" accept=".odesave,.txt,text/plain" data-file></label><p data-msg role="status"></p>`, [
+    { label: 'Copy my save code', action: () => copyFromDialog(code, 'Save code copied.') },
+    { label: 'Download save file', action: () => { const a = document.createElement('a'), url = URL.createObjectURL(new Blob([code + '\n'], { type: 'text/plain' })); a.href = url; a.download = `ode-save-${new Date().toISOString().slice(0, 10)}.odesave`; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); } },
+    { label: 'Check import', action: () => check(m.querySelector('[data-import]').value) },
+    { label: 'Back', primary: true, action: () => settingsMenu(back) }], 'SETTINGS');
+  const msg = m.querySelector('[data-msg]');
+  const check = text => {
+    try {
+      const { save, summary } = importSave(text); msg.textContent = `Valid save: ${summary}. Importing replaces your progress on this browser.`;
+      if (!m.querySelector('[data-confirm]')) { const b = document.createElement('button'); b.dataset.confirm = ''; b.textContent = 'Replace my progress with this save'; b.onclick = () => { G.save = save; storeSave(G.save); applySettings(); title(); }; m.querySelector('nav').prepend(b); b.focus(); }
+    } catch (e) { msg.textContent = e.message; m.querySelector('[data-confirm]')?.remove(); }
+  };
+  m.querySelector('[data-file]').onchange = e => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1 << 20) { msg.textContent = 'That file is too large to be a save.'; return; } f.text().then(t => { m.querySelector('[data-import]').value = t.trim(); check(t); }); };
 }
 const copyDiagnostics = () => copyFromDialog(JSON.stringify(G.telemetry?.report() ?? {}, null, 2), 'Diagnostic report copied.');
 function crashed(report) {
