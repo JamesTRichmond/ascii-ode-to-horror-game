@@ -33,7 +33,7 @@ async function loadAssets() {
 function applySettings() {
   const s = S(), root = document.documentElement; if (G.telemetry) G.telemetry.enabled = !!s.telemetry && !!G.telemetryConfig;
   root.style.setProperty('--scale', s.textScale); root.classList.toggle('contrast', !!s.contrast); root.classList.toggle('still', !!s.reducedMotion);
-  G.audio.setVolume(s.volume); if (G.input) G.input.sensitivity = s.sensitivity; $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
+  G.audio.setVolume(s.volume); G.audio.spatial = s.spatial === 'stereo' ? 'stereo' : 'binaural'; if (G.input) G.input.sensitivity = s.sensitivity; $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (s.quality === 'auto') { G.auto ||= createAutoQuality({ start: 'medium' }); } else G.auto = null;
   setTier(G.auto ? G.auto.tier : s.quality);
   G.pl.opts.reducedMotion = !!s.reducedMotion; G.hud.still = !!s.reducedMotion; storeSave(G.save);
@@ -113,6 +113,7 @@ function settingsMenu(back) {
     <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%')).join('')}</select></label>
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
     <label>Captions <select data-k="captions">${opt(true, s.captions, 'on')}${opt(false, s.captions, 'off')}</select></label>
+    <label>Spatial audio <select data-k="spatial">${opt('binaural', s.spatial || 'binaural', 'binaural 3D (headphones)')}${opt('stereo', s.spatial, 'stereo (speakers)')}</select></label>
     <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-k="volume"></label>
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
