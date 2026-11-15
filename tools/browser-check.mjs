@@ -50,7 +50,9 @@ try {
     const e = await p.evaluate(() => ({ kicker: document.getElementById('chapterKicker').textContent, mode: __ode.G.mode, tick: __ode.G.sim.tick }));
     await p.evaluate(() => { __ode.G.pl.sel = null; }); await p.waitForTimeout(600); // deliberate render-stage fault
     const c = await p.evaluate(() => ({ mode: __ode.G.mode, overlay: document.getElementById('menuTitle')?.textContent, crashes: __ode.G.telemetry.crashes.length, sent: __ode.G.telemetry.sent, hasReplayContext: !!(__ode.G.telemetry.crashes[0]?.inputs?.length && __ode.G.telemetry.crashes[0]?.endless) }));
-    report.liveops = { endless: e, crash: c, errors: errs.filter(x => !/sel/.test(x)) }; await p.close(); }
+    await p.evaluate(() => [...document.querySelectorAll('#menu button')].find(b => b.textContent === 'Restart verse')?.click()); await p.waitForTimeout(800); // recovery rebuilds the pipeline
+    const rec = await p.evaluate(() => ({ mode: __ode.G.mode, crashes: __ode.G.telemetry.crashes.length, tick: __ode.G.sim.tick, depth: __ode.G.endless?.depth }));
+    report.liveops = { endless: e, crash: c, recovered: rec, errors: errs.filter(x => !/sel/.test(x)) }; await p.close(); }
   // [css width, css height, HUD text scale, device pixel ratio]: 200% text; 200% browser zoom (half the CSS viewport at 2x density); narrow phone
   for (const [w, h, scale, dpr] of [[1280, 720, 1, 1], [1280, 720, 2, 1], [640, 360, 1, 2], [320, 640, 1, 1]]) {
     const p = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr }), errs = watch(p);
@@ -65,6 +67,7 @@ const PAUSE_MENU = new Set(['Resume', 'Settings', 'Restart chapter', 'Save and q
 const uiOk = !!report.ui && report.ui.paused === 'PAUSED' && report.ui.mode === 'play' && !report.ui.errors.length
   && report.ui.audio === 'running' && report.ui.reducedMotion === true && report.ui.focusCycle.length > 0 && report.ui.focusCycle.every(t => PAUSE_MENU.has(t));
 const ok = report.chapters.every(c => c.mode === 'play' && !c.errors.length) && uiOk && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length)
-  && report.liveops?.endless.mode === 'play' && report.liveops?.crash.overlay === 'SOMETHING BROKE' && report.liveops.crash.sent === 0 && report.liveops.crash.hasReplayContext;
+  && report.liveops?.endless.mode === 'play' && report.liveops?.crash.overlay === 'SOMETHING BROKE' && report.liveops.crash.sent === 0 && report.liveops.crash.hasReplayContext
+  && report.liveops.recovered.mode === 'play' && report.liveops.recovered.crashes === report.liveops.crash.crashes && report.liveops.recovered.depth === 2;
 if (out) fs.writeFileSync(path.join(out, 'browser-check.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 1)); console.log(ok ? 'BROWSER CHECK PASSED' : 'BROWSER CHECK FAILED'); process.exit(ok ? 0 : 1);

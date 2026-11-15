@@ -45,6 +45,8 @@ function setTier(tier) {
   const d = $('debug'); d.width = G.pl.w; d.height = G.pl.h;
   if (G.cpu) { const c = $('view'); c.width = G.pl.w * 2; c.height = G.pl.h * 2; G.cpu.img = G.cpu.ctx.createImageData(c.width, c.height); }
 }
+/** A crash can leave the render pipeline in any state, so recovery never reuses it: same tier, same options, new buffers. */
+function freshPipeline() { const opts = { ...G.pl.opts }; G.pl = createPipeline(G.atlas, G.noise, G.pl.quality); Object.assign(G.pl.opts, opts); }
 function resize() { const c = $('view'), dpr = Math.min(2, devicePixelRatio || 1), w = Math.min(1920, Math.round(c.clientWidth * dpr)) || 1440; c.width = w; c.height = Math.round((w * 9) / 16); }
 
 // ---------------------------------------------------------------- chapter flow
@@ -124,12 +126,12 @@ async function copyDiagnostics() {
 }
 function crashed(report) {
   if (G.mode === 'crashed') return; cancelDeferred(); G.mode = 'crashed'; G.input.enabled = false; document.exitPointerLock?.(); G.save.lastCrash = { at: report.at, message: report.message, chapter: report.chapter }; storeSave(G.save);
-  G.hud.menu('SOMETHING BROKE', `<p>The game hit an error and stopped this chapter. Your saved progress is safe.</p><p>The report below contains the chapter, seed and your inputs so the bug can be replayed exactly. It contains nothing about you.</p><p><code>${String(report.message).replace(/[<>&]/g, '')}</code></p>`,
-    [{ label: 'Copy crash report', primary: true, action: async () => { try { await navigator.clipboard.writeText(JSON.stringify(report)); G.hud.alert('CRASH REPORT COPIED', 2); } catch { console.info(JSON.stringify(report)); } } }, { label: G.endless ? 'Restart verse' : 'Restart chapter', action: recoverFromCrash }, { label: 'Title', action: title }], 'ERROR');
+  G.hud.menu('SOMETHING BROKE', `<p>The game hit an error and stopped this chapter. Your saved progress is safe. Restarting rebuilds the renderer; if the error returns, reload the game.</p><p>The report below contains the chapter, seed and your inputs so the bug can be replayed exactly. It contains nothing about you.</p><p><code>${String(report.message).replace(/[<>&]/g, '')}</code></p>`,
+    [{ label: 'Copy crash report', primary: true, action: async () => { try { await navigator.clipboard.writeText(JSON.stringify(report)); G.hud.alert('CRASH REPORT COPIED', 2); } catch { console.info(JSON.stringify(report)); } } }, { label: G.endless ? 'Restart verse' : 'Restart chapter', action: recoverFromCrash }, { label: 'Reload the game', action: () => location.reload() }, { label: 'Title', action: () => { freshPipeline(); title(); } }], 'ERROR');
 }
 /** Crash recovery: the same chapter, or the same Endless verse (unlike the pause menu's one-life 'Restart run'). */
 function recoverFromCrash() {
-  G.mode = 'play'; if (G.endless) startEndless(G.endless.seed, G.endless.depth); else startChapter(G.chapter);
+  freshPipeline(); G.mode = 'play'; if (G.endless) startEndless(G.endless.seed, G.endless.depth); else startChapter(G.chapter);
 }
 function died() {
   if (G.endless) { const d = G.endless.depth - 1; G.save.endlessBest = Math.max(G.save.endlessBest || 0, d); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); // a campaign save survives an Endless run G.telemetry?.track('endless_end', { depth: d }); G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.();
