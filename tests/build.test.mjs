@@ -16,3 +16,18 @@ test('production build: every shipped file is hashed, versions agree, rebuild is
   for (const f of ['index.html', 'src/game/main.js', 'assets/atlas/glyphs.bin', 'assets/atlas/atlas.png', 'assets/atlas/bluenoise.bin', 'LICENSE', 'assets/atlas/FONT-LICENSE.txt']) assert.ok(v.files[f], f);
   assert.ok(!Object.keys(v.files).some(f => f.startsWith('tests/') || f.startsWith('tools/') || f.startsWith('docs/')), 'no dev files shipped');
 });
+
+test('build import gate: every static import form is extracted, and a missing side-effect import fails', async () => {
+  const { importSpecifiers, checkImports } = await import('../tools/lib/imports.mjs');
+  const src = `import a from './a.js';\nimport { b,\n  c as d } from "./b.js";\nimport * as e from './e.js';\nexport { f } from './f.js';\nexport * from './g.js';\nimport './side.js';\nimport'./tight.js';\nconst m = import('./lazy.js');\nconst u = import.meta.url; export const V = '1.0'; // important: not an import`;
+  assert.deepEqual(importSpecifiers(src), ['./a.js', './b.js', './e.js', './f.js', './g.js', './side.js', './tight.js', './lazy.js']);
+  const files = ['src/game/main.js', 'src/game/hud.js'], read = f => (f.endsWith('main.js') ? "import './hud.js';\nimport './missing.js';\nimport x from 'bare';" : '');
+  assert.deepEqual(checkImports(files, read), ['src/game/main.js: missing ./missing.js', 'src/game/main.js: bare import bare']);
+  assert.deepEqual(checkImports(['src/a/x.js', 'src/b/y.js'], f => (f === 'src/a/x.js' ? "import '../b/y.js';" : '')), [], 'POSIX resolution across directories');
+});
+
+test('every shipped module resolves under the extended matcher (no form was previously skipped)', async () => {
+  const { checkImports } = await import('../tools/lib/imports.mjs');
+  const walk = d => fs.readdirSync(path.join(root, d), { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.posix.join(d, e.name)) : [path.posix.join(d, e.name)]));
+  assert.deepEqual(checkImports(walk('src'), f => fs.readFileSync(path.join(root, f), 'utf8')), []);
+});
