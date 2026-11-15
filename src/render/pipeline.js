@@ -97,7 +97,8 @@ function instance(pl, key) { let i = pl.instances.get(key); if (!i) { i = { x: 0
 export function renderFrame(pl, view, dt) {
   const t0 = now(), { gb, cam, prevCam, world, cascades: c, fog, sim: _ } = pl, sim = view.sim, th = THEMES[sim.def.id], ms = pl.stats.ms;
   pl.time += pl.opts.reducedMotion ? 0 : dt; const time = pl.time;
-  copyCamera(prevCam, cam); setCamera(cam, view.x, 1.62 + (view.hold ? -0.25 : 0), view.z, view.yaw, pl.opts.reducedMotion ? 0 : view.bob || 0);
+  const fov = view.fov || 74; if (fov !== (pl.fov || 74)) { pl.fov = fov; cam.f = prevCam.f = (cam.w / 2) / Math.tan((fov * Math.PI) / 360); } // photo mode may change the field of view
+  copyCamera(prevCam, cam); setCamera(cam, view.x, view.y ?? 1.62 + (view.hold ? -0.25 : 0), view.z, view.yaw, pl.opts.reducedMotion ? 0 : view.bob || 0);
   if (pl.firstFrame) copyCamera(prevCam, cam);
   syncWorld(world, sim, dt);
   // ---- G-buffer ----
