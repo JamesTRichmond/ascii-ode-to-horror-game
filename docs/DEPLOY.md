@@ -24,6 +24,19 @@ npm run preview
 
 The preview server sends the same security headers as `vercel.json` (including the CSP).
 
+## Trusted Types
+
+The CSP ends with `require-trusted-types-for 'script'; trusted-types ode-html; form-action 'none'`. In browsers that support Trusted Types, every DOM sink that can run script (`innerHTML`, `insertAdjacentHTML`, script text and script URLs, `new Worker`, `serviceWorker.register`) refuses plain strings, and `ode-html` is the only policy that can be created.
+
+| Rule | Where |
+|---|---|
+| Build markup with `` html`…` ``: every interpolated value is escaped unless it is itself `` html`…` `` output | `src/game/safe-html.js` |
+| Write it with `setHTML(el, …)`, the only `innerHTML` assignment in `src` (a test fails on any other sink) | `src/game/safe-html.js`, `tests/safe-html.test.mjs` |
+| `ode-html` accepts only an allowlist of tags and attributes: no `<script>`, no `on*` handlers, no `href`/`src`, no inline `style`. The same check runs in browsers without Trusted Types | `TAGS`, `ATTRS`, `TYPES` in `safe-html.js` |
+| A new tag or attribute in a menu is added to the allowlist together with a test case | `tests/safe-html.test.mjs` |
+| Worker and service-worker URLs go through `scriptURL(url)` (same-origin `.js` only) | `safe-html.js` |
+| `browser-check` opens every card and overlay under the CSP, requires zero violations and zero policy rejections, and probes that raw sinks and new policies are refused | `tools/browser-check.mjs` (`security`) |
+
 ## Targets
 
 | Target | Config | Trigger |
