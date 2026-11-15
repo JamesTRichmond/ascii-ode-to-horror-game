@@ -1,6 +1,7 @@
 // Player HUD and menus (guide phase 6, task 5-2). DOM text above the glyph field: every state is
 // carried by a label and a shape as well as colour, everything is keyboard reachable, and the
 // critical meters stay visible regardless of what the renderer is doing.
+import { encodeSeed } from '../sim/seedcode.js';
 import { TUNE, ET } from '../sim/sim.js';
 import { html, isSafeHTML, markup, setHTML } from './safe-html.js';
 
@@ -13,7 +14,7 @@ export function createHud() {
   const bar = (id, pct) => set($(id), id, Math.round(pct), (el, v) => { el.firstElementChild.style.width = v + '%'; el.setAttribute('aria-valuenow', v); });
 
   hud.show = on => { $('hud').hidden = !on; };
-  hud.setChapter = (def, total, endless = null) => { $('chapterKicker').textContent = endless ? `ENDLESS CHOIR · SEED ${endless.seed} · VERSE ${endless.depth}` : `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
+  hud.setChapter = (def, total, endless = null) => { $('chapterKicker').textContent = endless ? `ENDLESS CHOIR · ${encodeSeed(endless.seed)} · VERSE ${endless.depth}` : `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
   hud.caption = (lines, seconds = 3.2) => { for (const l of [].concat(lines)) hud.captionQueue.push([l, seconds]); };
   hud.pain = () => { hud.hurt = 0.8; };
   hud.alert = (text, seconds = 2.4) => { $('alert').textContent = text; hud.alertTimer = seconds; };

@@ -19,6 +19,7 @@ import { createAutoQuality, sampleFrame } from './quality.js';
 import { createTelemetry, loadTelemetryConfig, INPUT_CAP } from './telemetry.js';
 import { endlessVerse, weeklySeed } from '../sim/endless.js';
 import { html, setHTML, htmlStats, trustedTypesEnforced } from './safe-html.js';
+import { encodeSeed, decodeSeed } from '../sim/seedcode.js';
 
 export const VERSION = '1.1.0-rc.1';
 const U = CELL / 1024, $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
@@ -106,8 +107,16 @@ function endlessMenu() {
   const week = weeklySeed(new Date()), best = G.save.endlessBest || 0;
   G.hud.menu('ENDLESS CHOIR', html`<p>Verses without end, sung from the stanzas you know. Each verse borrows a rule; each is harder than the last. One life.</p><p>Deepest verse reached: ${best}</p>`, [
     { label: 'Begin a new run', primary: true, action: () => startEndless((Math.random() * 1e9) | 0, 1) },
-    { label: `This week's choir (seed ${week})`, action: () => startEndless(week, 1) },
+    { label: `This week's choir (${encodeSeed(week)})`, action: () => startEndless(week, 1) },
+    { label: 'Play a shared seed code', action: seedCodeMenu },
     { label: 'Back', action: title }], 'POST-LAUNCH');
+}
+/** Enter a friend's seed code; errors are explained inside the dialog. */
+function seedCodeMenu() {
+  const m = G.hud.menu('SHARED SEED', html`<label>Seed code <input data-code maxlength="13" autocomplete="off" spellcheck="false" placeholder="7K2M-Q9XD-4"></label><p data-err role="alert"></p>`, [
+    { label: 'Sing it', primary: true, action: () => { try { const { seed, flags } = decodeSeed(m.querySelector('[data-code]').value); if (flags) throw new Error('That code was made by a newer version of the game.'); startEndless(seed, 1); } catch (e) { m.querySelector('[data-err]').textContent = e.message; } } },
+    { label: 'Back', action: endlessMenu }], 'ENDLESS CHOIR');
+  const field = m.querySelector('[data-code]'); field.onkeydown = e => { if (e.key === 'Enter') m.querySelector('button.primary').click(); }; field.focus();
 }
 function chapterMenu() { G.hud.menu('CHAPTERS', '', CHAPTERS.map((c, i) => ({ label: `${c.id}. ${c.title}`, disabled: i >= G.save.unlocked, action: () => startChapter(i) })).concat({ label: 'Back', action: title }), 'SELECT A STANZA'); }
 function helpMenu() {
@@ -172,7 +181,7 @@ function recoverFromCrash() {
 function died() {
   if (G.endless) { const d = G.endless.depth - 1; G.save.endlessBest = Math.max(G.save.endlessBest || 0, d); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); /* a campaign save survives an Endless run */
     G.telemetry?.track('endless_end', { depth: d }); G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.();
-    G.hud.menu('UNWRITTEN', html`<p>The choir goes on without you. Verses completed: ${d}. Seed ${G.endless.seed}.</p>`, [{ label: 'Begin again', primary: true, action: () => startEndless(G.endless.seed, 1) }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
+    G.hud.menu('UNWRITTEN', html`<p>The choir goes on without you. Verses completed: ${d}. Seed code <strong>${encodeSeed(G.endless.seed)}</strong> — share it to let others sing the same verses.</p>`, [{ label: 'Begin again', primary: true, action: () => startEndless(G.endless.seed, 1) }, { label: 'Copy seed code', action: () => copyFromDialog(encodeSeed(G.endless.seed), 'Seed code copied.') }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
   G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.(); G.hud.menu('UNWRITTEN', html`<p>The page forgets you. The stanza begins again.</p>`, [{ label: 'Begin the chapter again', primary: true, action: () => startChapter(G.chapter) }, { label: 'Title', action: title }], `CHAPTER ${G.sim.def.id}`); }
 function completed() {
   if (G.endless) { const { seed, depth } = G.endless; G.save.endlessBest = Math.max(G.save.endlessBest || 0, depth); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.();
@@ -273,6 +282,7 @@ async function boot() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
   globalThis.__ode = { G, startChapter, startEndless, title, security: () => ({ trustedTypes: trustedTypesEnforced(), ...htmlStats }), hashState: () => hashState(G.sim), stats: () => ({ tier: G.pl.quality, auto: G.auto ? { tier: G.auto.tier, changes: G.auto.changes, lastP95: G.auto.lastP95 } : null, frames: [...G.frames], intervals: [...G.intervals], switchRates: [...G.switchRates], ms: { ...G.pl.stats.ms }, leaves: { ...G.pl.qt.stats }, glyphs: { ...G.pl.sel.stats }, out: G.out ? { ...G.out.stats, kind: G.out.kind } : { kind: 'cpu' }, tick: G.sim?.tick, mode: G.mode, chapter: G.chapter, cascade: G.pl.stats.cascade }) };
   requestAnimationFrame(frame);
-  if (params.get('endless')) startEndless(+params.get('endless') || 1, +(params.get('depth') || 1)); else if (params.get('chapter')) startChapter(Math.max(0, Math.min(CHAPTERS.length - 1, +params.get('chapter') - 1))); else title();
+  let shared = null; try { shared = params.get('seed') ? decodeSeed(params.get('seed')) : null; } catch (e) { console.info('ignoring ?seed:', e.message); }
+  if (shared && !shared.flags) startEndless(shared.seed, 1); else if (params.get('endless')) startEndless(+params.get('endless') || 1, +(params.get('depth') || 1)); else if (params.get('chapter')) startChapter(Math.max(0, Math.min(CHAPTERS.length - 1, +params.get('chapter') - 1))); else title();
 }
 boot();
