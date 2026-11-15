@@ -123,7 +123,7 @@ function stepPlayer(s, input) {
   const p = s.p, c = s.c, rule = s.def.rule, turn = ((input >> 12) & 0xfff) << 20 >> 20;
   p.ang = (p.ang + turn + (input & IN.TURNR ? TUNE.turn : 0) - (input & IN.TURNL ? TUNE.turn : 0)) & (ANG - 1);
   if (p.iframes > 0) p.iframes--; if (p.cooldown > 0) p.cooldown--; if (p.gasp > 0) p.gasp--;
-  const voiced = !(rule & RULE.MUTE_START) || p.measures > 0;
+  const voiced = !(rule & RULE.SILENT) && (!(rule & RULE.MUTE_START) || p.measures > 0);
   p.hold = input & IN.HOLD && p.gasp === 0 && p.breath > 0 ? 1 : 0;
   p.hum = input & IN.HUM && voiced && !p.hold && p.breath > 0 && p.gasp === 0 ? 1 : 0;
   // movement
