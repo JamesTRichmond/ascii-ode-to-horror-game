@@ -35,7 +35,7 @@ async function loadAssets() {
 function applySettings() {
   const s = S(), root = document.documentElement; if (G.telemetry) G.telemetry.enabled = !!s.telemetry && !!G.telemetryConfig;
   root.style.setProperty('--scale', s.textScale); root.classList.toggle('contrast', !!s.contrast); root.classList.toggle('still', !!s.reducedMotion);
-  G.audio.setVolume(s.volume); if (G.input) G.input.sensitivity = s.sensitivity; $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
+  G.audio.setVolume(s.volume); if (G.input) { G.input.sensitivity = s.sensitivity; G.input.vibration = s.vibration !== false; } $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (s.quality === 'auto') { G.auto ||= createAutoQuality({ start: 'medium' }); } else G.auto = null;
   // render thread: the worker needs the WebGL output path and is bypassed while a G-buffer inspection view is shown
   const thread = s.renderThread === 'worker' && G.out && !s.debug ? 'worker' : 'local';
@@ -126,7 +126,7 @@ function seedCodeMenu() {
 }
 function chapterMenu() { G.hud.menu('CHAPTERS', '', CHAPTERS.map((c, i) => ({ label: `${c.id}. ${c.title}`, disabled: i >= G.save.unlocked, action: () => startChapter(i) })).concat({ label: 'Back', action: title }), 'SELECT A STANZA'); }
 function helpMenu() {
-  G.hud.menu('HOW TO PLAY', html`<dl><dt>W A S D</dt><dd>Walk and strafe</dd><dt>Mouse / ← → / Q</dt><dd>Turn (click the view to capture the mouse)</dd><dt>Space (hold)</dt><dd>Hum — light, and be heard</dd><dt>F / click</dt><dd>Chord — stagger what is close</dd><dt>Shift (hold)</dt><dd>Hold your breath — silent, slow</dd><dt>E</dt><dd>Use</dd><dt>Esc / P</dt><dd>Pause</dd></dl><p>Your voice costs Breath. Everything that hears you comes.</p>`, [{ label: 'Back', primary: true, action: title }], 'ODE');
+  G.hud.menu('HOW TO PLAY', html`<dl><dt>W A S D</dt><dd>Walk and strafe</dd><dt>Mouse / ← → / Q</dt><dd>Turn (click the view to capture the mouse)</dd><dt>Space (hold)</dt><dd>Hum — light, and be heard</dd><dt>F / click</dt><dd>Chord — stagger what is close</dd><dt>Shift (hold)</dt><dd>Hold your breath — silent, slow</dd><dt>E</dt><dd>Use</dd><dt>Esc / P</dt><dd>Pause</dd></dl><p>Controller: left stick or D-pad walk · right stick turn · RT hum · LT hold breath · RB or X chord · A use · Start pause. In menus, the D-pad moves, A selects, B backs out.</p><p>Your voice costs Breath. Everything that hears you comes.</p>`, [{ label: 'Back', primary: true, action: title }], 'ODE');
 }
 function settingsMenu(back) {
   const s = S(), opt = (v, cur, t) => html`<option value="${v}" ${String(cur) === String(v) ? html`selected` : ''}>${t}</option>`;
@@ -138,6 +138,7 @@ function settingsMenu(back) {
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
     <label>Captions <select data-k="captions">${opt(true, s.captions, 'on')}${opt(false, s.captions, 'off')}</select></label>
     <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-k="volume"></label>
+    <label>Controller vibration <select data-k="vibration">${opt(true, s.vibration !== false, 'on')}${opt(false, s.vibration !== false, 'off')}</select></label>
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
@@ -210,7 +211,7 @@ function present(e) {
     case 'measure': burst(pl, x, 1.2, z, 40, 3.5, CY, 1.1); hud.alert(`A MEASURE RETURNS · ${e.a}/${def.need}`); hud.caption(STANZAS[def.id - 1].slice(2 + e.a * 2 - 2, 2 + e.a * 2 + 2).slice(0, 2)); break;
     case 'hum': burst(pl, x + Math.cos(pl.cam.yaw) * 0.8, 1.2, z + Math.sin(pl.cam.yaw) * 0.8, 5, 1.6, CY, 0.9, pl.cam.yaw); break;
     case 'chord': pl.flash = 1; burst(pl, x + Math.cos(pl.cam.yaw), 1.3, z + Math.sin(pl.cam.yaw), 70, 9, CY, 0.8, pl.cam.yaw); break;
-    case 'hurt': G.hurtFlash = 1; hud.pain(); burst(pl, x, 1.2, z, 14, 2, RED, 0.5); hud.alert('YOU ARE BEING UNWRITTEN', 1.2); break;
+    case 'hurt': G.input.rumble?.(0.7, 170); G.hurtFlash = 1; hud.pain(); burst(pl, x, 1.2, z, 14, 2, RED, 0.5); hud.alert('YOU ARE BEING UNWRITTEN', 1.2); break;
     case 'unwritten': burst(pl, x, 1.2, z, 90, 3, PALE, 1.4); hud.alert('UNWRITTEN', 1.2); break;
     case 'stagger': burst(pl, x, 1.4, z, 22, 2.5, PALE, 0.7); break;
     case 'gate': hud.alert('THE WAY OPENS', 3); hud.caption(STANZAS[def.id - 1].slice(6)); break;
@@ -227,7 +228,7 @@ function present(e) {
     case 'relight': hud.alert('THE FLAME RETURNS', 1.5); break;
     case 'gasp': hud.alert('YOU GASP', 1.2); break;
     case 'wake': burst(pl, x, 0.6, z, 20, 1.5, GOLDC, 1.2); hud.alert('THE SLEEPER STIRS', 1.2); break;
-    case 'death': burst(pl, x, 1.2, z, 120, 4, PALE, 1.6); defer(died, S().reducedMotion ? 300 : 1400); break;
+    case 'death': G.input.rumble?.(1, 600); burst(pl, x, 1.2, z, 120, 4, PALE, 1.6); defer(died, S().reducedMotion ? 300 : 1400); break;
     case 'complete': defer(completed, 500); break;
     default: break;
   }
@@ -236,6 +237,7 @@ function present(e) {
 // ---------------------------------------------------------------- loop
 function frame(t) {
   requestAnimationFrame(frame);
+  if (G.mode !== 'play') G.input?.menuPoll?.(); // controller navigation of every menu, including the crash dialog
   if (G.mode === 'crashed') return;
   try { frameBody(t); } catch (e) { crashed(G.telemetry ? G.telemetry.crash(e, 'frame') : { message: String(e) }); }
 }
@@ -281,7 +283,9 @@ async function boot() {
   G.telemetryConfig = await loadTelemetryConfig();
   G.telemetry = createTelemetry({ version: VERSION, endpoint: G.telemetryConfig?.endpoint ?? null, getState: () => G.sim ? { chapter: G.chapter + 1, endless: G.endless, seed: G.runSeed, tick: G.sim.tick, hash: G.failingInput == null ? hashState(G.sim) : null, failingInput: G.failingInput, log: G.log, base: G.base, tier: G.pl?.quality } : {} });
   G.telemetry.install(report => crashed(report));
-  G.input = createInput(canvas); G.input.onPause = pause; applySettings(); // applies saved consent before the first event
+  G.input = createInput(canvas); G.input.onPause = pause;
+  G.input.onMenuBack = intent => { if (G.mode === 'pause') { resume(); return; } if (intent === 'back') [...document.querySelectorAll('#menu nav button')].find(b => /^(Back|Done)$/.test(b.textContent))?.click(); };
+  addEventListener('gamepadconnected', e => { G.hud.alert(`CONTROLLER CONNECTED · ${String(e.gamepad.id).slice(0, 28).toUpperCase()}`, 2.4); }); applySettings(); // applies saved consent before the first event
   G.telemetry.track('session_start', { tier: S().quality, reducedMotion: !!S().reducedMotion, textScale: S().textScale });
   if (!G.out) { canvas.width = G.pl.w * 2; canvas.height = G.pl.h * 2; const ctx = canvas.getContext('2d'); G.cpu = { ctx, img: ctx.createImageData(canvas.width, canvas.height) }; }
   if (matchMedia('(pointer: coarse)').matches) $('touch').hidden = false;
