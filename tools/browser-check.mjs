@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Browser acceptance checks (needs a local Playwright + Chromium; not a project dependency).
-// Usage: node tools/browser-check.mjs [--out dir] [--seconds 6] [--quality medium] [--gpu]
+// Usage: node tools/browser-check.mjs [--out dir] [--seconds 6] [--quality medium] [--gpu] [--browser chromium|firefox|webkit]
 // Starts the static server itself, then reports JSON:
 //   chapters  every chapter loads in play mode with zero console errors; frame p50/p95
 //   ui        title -> begin -> pause (Esc) -> settings -> resume, keyboard focus trap, audio running
@@ -13,17 +13,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] ?? true : d; };
-const out = arg('out', null), seconds = +arg('seconds', 6), quality = arg('quality', 'auto'), port = 8000 + (process.pid % 900);
-let chromium;
-try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_PATH || 'playwright').chromium; }
+const engine = String(arg('browser', 'chromium')), out = arg('out', null), seconds = +arg('seconds', 6), quality = arg('quality', 'auto'), port = 8000 + (process.pid % 900);
+if (!['chromium', 'firefox', 'webkit'].includes(engine)) { console.error(`Unknown --browser ${engine}; use chromium, firefox or webkit.`); process.exit(2); }
+let chromium; // the selected Playwright engine (name kept for the launch code below)
+try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_PATH || 'playwright')[engine]; }
 catch { console.error('Playwright is not installed. Set PLAYWRIGHT_PATH to its package directory, or install it globally.'); process.exit(2); }
 const server = spawn(process.execPath, [path.join(root, 'tools/serve.mjs'), String(port), root], { stdio: 'ignore' });
 await new Promise(r => setTimeout(r, 600));
-const args = arg('gpu', false) ? [] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const args = engine !== 'chromium' || arg('gpu', false) ? [] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 let browser;
-try { browser = await chromium.launch({ args: [...args, '--autoplay-policy=no-user-gesture-required'] }); }
-catch (e) { server.kill(); console.error('Chromium failed to launch:', e.message); process.exit(2); } // never leave the server holding the port
-const base = `http://localhost:${port}/`, report = { browser: browser.version(), quality, seconds, chapters: [], ui: null, hud: [] };
+try { browser = await chromium.launch(engine === 'chromium' ? { args: [...args, '--autoplay-policy=no-user-gesture-required'] } : {}); }
+catch (e) { server.kill(); console.error(`${engine} failed to launch (is its Playwright browser installed?):`, e.message); process.exit(2); } // never leave the server holding the port
+const base = `http://localhost:${port}/`, report = { engine, browser: browser.version(), quality, seconds, chapters: [], ui: null, hud: [] };
 const watch = p => { const errs = []; p.on('pageerror', e => errs.push(String(e))); p.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !/AudioContext was not allowed/.test(m.text())) errs.push(m.text()); }); return errs; };
 const q = (a, f) => { const s = [...a].sort((x, y) => x - y); return +(s[Math.min(s.length - 1, Math.floor(s.length * f))] || 0).toFixed(1); };
 try {
