@@ -105,8 +105,11 @@ export function shade(gb, cam, env) {
 export function fogDensity(fog, x, y, z, time) {
   if (fog.homogeneous) return fog.sigma;
   let s = fog.sigma * Math.exp(-Math.max(0, y) / fog.height) * (0.55 + 0.9 * (0.5 + 0.5 * Math.sin(x * 0.61 + time * 0.23 + Math.sin(z * 0.47 - time * 0.17) * 1.9) * Math.sin(z * 0.53 + y * 0.9 + time * 0.11)));
-  const blobs = fog.blobs;
-  if (blobs) for (let b = 0; b < blobs.length; b += 5) { const dx = x - blobs[b], dy = y - blobs[b + 1], dz = z - blobs[b + 2], q = (dx * dx + dy * dy + dz * dz) / (blobs[b + 3] * blobs[b + 3]); if (q < 1) s += blobs[b + 4] * (1 - q) * (1 - q); }
+  const blobs = fog.blobs, grid = fog.blobGrid;
+  if (blobs && grid && grid.src === blobs) { // only the bodies whose box covers this point's 2 m column, in their original order
+    const gx = Math.floor(x / 2) - grid.x0, gz = Math.floor(z / 2) - grid.z0;
+    if (gx >= 0 && gz >= 0 && gx < grid.w && gz < grid.h) for (let n = grid.start[gz * grid.w + gx], end = grid.start[gz * grid.w + gx + 1]; n < end; n++) { const b = grid.list[n], dx = x - blobs[b], dy = y - blobs[b + 1], dz = z - blobs[b + 2], q = (dx * dx + dy * dy + dz * dz) / (blobs[b + 3] * blobs[b + 3]); if (q < 1) s += blobs[b + 4] * (1 - q) * (1 - q); }
+  } else if (blobs) for (let b = 0; b < blobs.length; b += 5) { const dx = x - blobs[b], dy = y - blobs[b + 1], dz = z - blobs[b + 2], q = (dx * dx + dy * dy + dz * dz) / (blobs[b + 3] * blobs[b + 3]); if (q < 1) s += blobs[b + 4] * (1 - q) * (1 - q); }
   return s > 0 ? s : 0;
 }
 
@@ -116,8 +119,22 @@ export function fogDensity(fog, x, y, z, time) {
  *   Tseg = exp(-sigma * ds);  L += T * source * (1 - Tseg);  T *= Tseg
  */
 export function createFog(w, h, scale = 3) { const fw = Math.ceil(w / scale), fh = Math.ceil(h / scale); return { scale, fw, fh, L: new Float32Array(fw * fh * 3), T: new Float32Array(fw * fh).fill(1), steps: 8, sigma: 0.018, height: 3, maxDist: 48, blobs: null, albedo: 0.9, ambient: [0.01, 0.02, 0.025] }; }
+/** Bin fog bodies into 2 m columns (CSR lists, ascending body order). A body only contributes where |dx|, |dz| < r, so
+ *  skipping the bodies outside a column changes no sum: fogDensity stays bit-identical, with a fraction of the work. */
+export function binFogBodies(fog) {
+  const B = fog.blobs; if (!B || !B.length) { fog.blobGrid = null; return; }
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (let b = 0; b < B.length; b += 5) { const r = B[b + 3]; x0 = Math.min(x0, Math.floor((B[b] - r) / 2)); x1 = Math.max(x1, Math.floor((B[b] + r) / 2)); z0 = Math.min(z0, Math.floor((B[b + 2] - r) / 2)); z1 = Math.max(z1, Math.floor((B[b + 2] + r) / 2)); }
+  const w = x1 - x0 + 1, h = z1 - z0 + 1, count = new Int32Array(w * h + 1);
+  if (w * h > 1 << 16) { fog.blobGrid = null; return; } // absurd extents: fall back to the plain loop
+  const each = fn => { for (let b = 0; b < B.length; b += 5) { const r = B[b + 3], ax = Math.floor((B[b] - r) / 2) - x0, bx = Math.floor((B[b] + r) / 2) - x0, az = Math.floor((B[b + 2] - r) / 2) - z0, bz = Math.floor((B[b + 2] + r) / 2) - z0; for (let gz = az; gz <= bz; gz++) for (let gx = ax; gx <= bx; gx++) fn(gz * w + gx, b); } };
+  each(c => count[c + 1]++); for (let i = 0; i < w * h; i++) count[i + 1] += count[i];
+  const list = new Int32Array(count[w * h]), fill = count.slice(0, w * h); each((c, b) => { list[fill[c]++] = b; });
+  fog.blobGrid = { src: B, x0, z0, w, h, start: count, list };
+}
 export function integrateFog(fog, gb, cam, env, noise) {
   const { fw, fh, scale, steps } = fog, c = env.cascades, time = env.time, exp = env.exposure ?? 1;
+  binFogBodies(fog);
   for (let fy = 0; fy < fh; fy++) for (let fx = 0; fx < fw; fx++) {
     const sx = Math.min(gb.w - 1, fx * scale + (scale >> 1)), sy = Math.min(gb.h - 1, fy * scale + (scale >> 1)), i = fy * fw + fx;
     const d = Math.min(fog.maxDist, gb.depth[sy * gb.w + sx]), a = (sx + 0.5 - gb.w / 2) / cam.f, vy = (sy + 0.5 - cam.cy) / cam.f;
