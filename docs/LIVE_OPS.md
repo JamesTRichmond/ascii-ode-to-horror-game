@@ -96,7 +96,8 @@ Players see the in-game update notice from `version.json` on their next visit; s
 | Version | Content | Status / hook |
 |---|---|---|
 | 1.1 | **Endless Choir**: procedurally generated verses from (seed, depth), three verse kinds borrowing campaign rules, escalating threats, one life, best-depth record, weekly shared seed | **Implemented** (`src/sim/endless.js`); unlocks after Chapter 8 or any ending; deterministic, replayable, tested |
-| 1.2 | Firefox/Safari certification; GPU-path timing on named hardware; Web Worker render to free the main thread | Planned |
+| 1.2 | **Web Worker render**: the whole pipeline runs in a module worker; the main thread keeps simulation, input, audio, HUD and the GL draw (main-thread frame CPU 36.6 ms → 0.2 ms; rendered fps +26 % on 4 vCPU software GL); output byte-identical to in-thread rendering | **Implemented** (`src/render/worker.js`, `src/render/client.js`; Settings → Render thread, default worker) |
+| 1.2 (rest) | Firefox/Safari certification; GPU-path timing on named hardware | Planned |
 | 1.3 | **Epilogue — "A Singer Who Sings No More"**: a tenth stanza-less chapter after ending 2, using the Endless generator with a fixed seed and the Chapter 9 theme | Hook: `endlessVerse(seed, depth)` + `def.theme`; needs writing and a map |
 | 1.4 | Challenge modifiers for Endless (no hum, permanent dawn, double threats) | Hook: verse `KINDS` table and chapter `rule` flags |
 | Later | Community seeds (share a seed string), replays as ghost runs (input logs already deterministic) | Hook: RLE input logs and `replayReport` |
