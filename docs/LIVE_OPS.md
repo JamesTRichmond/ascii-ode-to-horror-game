@@ -99,4 +99,5 @@ Players see the in-game update notice from `version.json` on their next visit; s
 | 1.2 | Firefox/Safari certification; GPU-path timing on named hardware; Web Worker render to free the main thread | Planned |
 | 1.3 | **Epilogue — "A Singer Who Sings No More"**: a tenth stanza-less chapter after ending 2, using the Endless generator with a fixed seed and the Chapter 9 theme | Hook: `endlessVerse(seed, depth)` + `def.theme`; needs writing and a map |
 | 1.4 | Challenge modifiers for Endless (no hum, permanent dawn, double threats) | Hook: verse `KINDS` table and chapter `rule` flags |
-| Later | Community seeds (share a seed string), replays as ghost runs (input logs already deterministic) | Hook: RLE input logs and `replayReport` |
+| 1.1.x | **Community seeds**: every Endless run has a 9-symbol code (`0037-JCG0-0`, Crockford base32 + mod-37 check) shown in the HUD and on the end screen, copyable, enterable from the Endless menu or as `?seed=CODE` | **Implemented** (`src/sim/seedcode.js`); every single-symbol typo and adjacent swap is rejected |
+| Later | Replays as ghost runs (input logs already deterministic) | Hook: RLE input logs and `replayReport` |
