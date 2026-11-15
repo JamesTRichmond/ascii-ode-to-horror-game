@@ -1,7 +1,7 @@
 // Property-based fuzzing of the deterministic simulation. Zero dependencies; every run is reproducible from its seed.
 // An input program is a sequence of held "gestures" (buttons held for a random number of ticks, with a random turn
 // rate), which reaches far more of the state space than independent per-tick noise.
-import { createSim, step, serialize, deserialize, hashState, solidAt, TUNE, IN, packInput } from '../../src/sim/sim.js';
+import { createSim, step, serialize, stateWords, deserialize, hashState, solidAt, TUNE, IN, packInput } from '../../src/sim/sim.js';
 
 export function xorshift(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
 
@@ -18,8 +18,8 @@ export function inputProgram(seed, ticks) {
 
 /** Every invariant the simulation promises; returns a list of violations (empty = pass). */
 export function checkInvariants(s, prev) {
-  const bad = [], p = s.p, ints = serialize(s);
-  for (let i = 0; i < ints.length; i++) if (!Number.isInteger(ints[i]) || ints[i] !== (ints[i] | 0)) { bad.push(`serialized[${i}] = ${ints[i]} is not an int32`); break; }
+  const bad = [], p = s.p, words = stateWords(s); // the raw words: an Int32Array would already have truncated a float
+  for (let i = 0; i < words.length; i++) if (!Number.isInteger(words[i]) || words[i] !== (words[i] | 0)) { bad.push(`serialized[${i}] = ${words[i]} is not an int32`); break; }
   if (p.hp < 0 || p.hp > TUNE.hpMax) bad.push(`hp ${p.hp} outside [0, ${TUNE.hpMax}]`);
   if (p.breath < 0 || p.breath > TUNE.breathMax) bad.push(`breath ${p.breath} outside [0, ${TUNE.breathMax}]`);
   if (p.measures < 0 || (s.def.need && p.measures > s.def.need)) bad.push(`measures ${p.measures} outside [0, ${s.def.need}]`);

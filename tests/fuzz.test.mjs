@@ -13,6 +13,8 @@ test('input programs are reproducible from their seed', () => {
 test('the invariant checker catches a planted violation', () => {
   const s = createSim(0, 1); s.p.hp = 101; assert.match(checkInvariants(s).join(), /hp 101/);
   const t = createSim(0, 1); t.p.x = -5; assert.match(checkInvariants(t).join(), /outside/);
+  const u = createSim(0, 1); u.p.x += 0.5; assert.match(checkInvariants(u).join(), /is not an int32/, 'a fractional field is state the Int32 save would silently change');
+  const v = createSim(0, 1); v.c.noiseAge = 2 ** 31; assert.match(checkInvariants(v).join(), /is not an int32/, 'an overflowing field wraps in the Int32 save');
 });
 for (const [i, c] of CHAPTERS.entries()) test(`fuzz chapter ${c.id}: 12 programs x 1500 ticks keep every invariant and restore exactly`, t => {
   let ended = 0; for (let seed = 1; seed <= 12; seed++) { const r = fuzzRun(i, seed, 1500); assert.ok(r.ok, `seed ${seed}: ${r.violations?.join('; ')}`); if (r.dead || r.done) ended++; }
