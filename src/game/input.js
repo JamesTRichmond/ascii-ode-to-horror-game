@@ -1,11 +1,13 @@
 // Input collection. Produces one packed integer word per simulation tick; nothing here is authoritative.
-import { IN, packInput } from '../sim/sim.js';
-
-const KEYS = { KeyW: IN.FWD, ArrowUp: IN.FWD, KeyS: IN.BACK, ArrowDown: IN.BACK, KeyA: IN.LEFT, KeyD: IN.RIGHT, ArrowLeft: IN.TURNL, ArrowRight: IN.TURNR, KeyQ: IN.TURNL, Space: IN.HUM, KeyF: IN.CHORD, ShiftLeft: IN.HOLD, ShiftRight: IN.HOLD, KeyE: IN.USE, Enter: IN.USE };
+import { packInput } from '../sim/sim.js';
+import { DEFAULT_BINDINGS, keymap } from './bindings.js';
 
 export function createInput(canvas, opts) {
   const st = { buttons: 0, turn: 0, taps: 0, locked: false, sensitivity: 1, enabled: false, onPause: null };
-  const down = e => { if ((e.code === 'Escape' || e.code === 'KeyP') && e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); return; } /* auto-repeat of a held pause key must never resume */ if (!st.enabled) return; if (e.code === 'Escape' || e.code === 'KeyP') { st.onPause?.(); e.preventDefault(); e.stopImmediatePropagation(); return; } /* the same press must not also resume */ const b = KEYS[e.code]; if (b) { st.buttons |= b; st.taps |= b; e.preventDefault(); } };
+  let { keys: KEYS, pause: PAUSE } = keymap(DEFAULT_BINDINGS);
+  /** Apply a full bindings object (see bindings.js); held keys are released so nothing sticks across a change. */
+  st.setBindings = b => { ({ keys: KEYS, pause: PAUSE } = keymap(b)); st.buttons = 0; };
+  const down = e => { if (st.capture) return; if (PAUSE.has(e.code) && e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); return; } /* auto-repeat of a held pause key must never resume */ if (!st.enabled) return; if (PAUSE.has(e.code)) { st.onPause?.(); e.preventDefault(); e.stopImmediatePropagation(); return; } /* the same press must not also resume */ const b = KEYS[e.code]; if (b) { st.buttons |= b; st.taps |= b; e.preventDefault(); } };
   const up = e => { const b = KEYS[e.code]; if (b) st.buttons &= ~b; };
   addEventListener('keydown', down); addEventListener('keyup', up); addEventListener('blur', () => { st.buttons = 0; });
   canvas.addEventListener('click', () => { if (st.enabled && !st.locked && opts?.pointerLock !== false) canvas.requestPointerLock?.()?.catch?.(() => { /* denied or cancelled lock is ordinary play, not a crash */ }); });
