@@ -65,7 +65,13 @@ export function shade(gb, cam, env) {
       let k = 1;
       if (m === 2) { // stone courses and joints
         if (N[1] > 0.5 || N[1] < -0.5) { const u = wx - Math.floor(wx), v = wz - Math.floor(wz); k = u < 0.06 || v < 0.06 ? 0.4 : 0.8 + 0.3 * hash2(Math.floor(wx), Math.floor(wz)); }
-        else { const row = Math.floor(wy / 0.55), u = (wx + wz) * 0.8 + (row & 1) * 0.5, fv = wy / 0.55 - row; k = fv < 0.1 || u - Math.floor(u) < 0.06 ? 0.38 : 0.75 + 0.4 * hash2(Math.floor(u), row); }
+        else {
+          const row = Math.floor(wy / 0.55), u = (wx + wz) * 0.8 + (row & 1) * 0.5, fv = wy / 0.55 - row, fu = u - Math.floor(u), bh = hash2(Math.floor(u), row);
+          k = fv < 0.1 || fu < 0.06 ? 0.38 : 0.7 + 0.45 * bh;
+          // weathering: fine pitting, and a hairline crack across some blocks
+          k *= 0.72 + 0.5 * hash2(Math.floor((wx + wz) * 11), Math.floor(wy * 11));
+          if (bh > 0.62 && Math.abs(fv - 0.2 - fu * 0.6 * (bh - 0.5) * 4) < 0.05) k *= 0.35;
+        }
       } else if (m === 1) k = 0.55 + 0.35 * Math.sin(wy * 41 + Math.sin((wx + wz) * 17) * 5) ** 2 + 0.2 * hash2(wx * 23, wy * 23 + wz * 31);
       else if (m === 7) k = 0.55 + 0.9 * hash2(Math.floor(wx * 5), Math.floor(wz * 5));
       else if (m === 9) k = 0.7 + 0.5 * hash2(Math.floor(wx * 9), Math.floor(wz * 9));
@@ -78,12 +84,19 @@ export function shade(gb, cam, env) {
       const cc = x >> 1, key = (normal[i * 2] & 0xfff0) ^ ((normal[i * 2 + 1] & 0xfff0) << 12) ^ (object[i] << 4) ^ m;
       if (cKey[cc] === key) { E[0] = cE[cc * 3]; E[1] = cE[cc * 3 + 1]; E[2] = cE[cc * 3 + 2]; }
       else { probeIrradiance(c, wx, wz, N[0], N[1], N[2], E); cKey[cc] = key; cE[cc * 3] = E[0]; cE[cc * 3 + 1] = E[1]; cE[cc * 3 + 2] = E[2]; }
+      // the singer's presence: a point light at the eye (no visible shadows by construction), inverse-square falloff
+      let lan = 0;
+      if (env.lantern) { const lx = cam.x - wx, ly = cam.y - 0.25 - wy, lz = cam.z - wz, d2 = lx * lx + ly * ly + lz * lz, il = 1 / Math.sqrt(d2 || 1); lan = (env.lantern.intensity * Math.max(0, (N[0] * lx + N[1] * ly + N[2] * lz) * il)) / (1 + d2 * env.lantern.falloff); }
       // soft rim toward the viewer keeps silhouettes sculpted in near-darkness
       const rim = Math.max(0, -(N[0] * (cam.fx + cam.rx * a) + N[2] * (cam.fz + cam.rz * a)) + N[1] * vy) * (object[i] ? 0.06 : 0.02);
-      const al = ALB[m], em = EMI[m], pulse = m === 13 || m === 6 ? 0.65 + 0.35 * Math.sin(time * 1.7 + (wx + wy + wz) * 2.1) : m === 15 ? 0.7 + 0.3 * Math.sin(time * 9 + wy * 8) : 1;
-      radiance[o] = (al[0] * k * (amb[0] + LC[0] * lit + E[0] + rim) + em[0] * pulse) * exp;
-      radiance[o + 1] = (al[1] * k * (amb[1] + LC[1] * lit + E[1] + rim) + em[1] * pulse) * exp;
-      radiance[o + 2] = (al[2] * k * (amb[2] + LC[2] * lit + E[2] + rim) + em[2] * pulse) * exp;
+      let al = ALB[m], em = EMI[m], pulse = m === 13 || m === 6 ? 0.65 + 0.35 * Math.sin(time * 1.7 + (wx + wy + wz) * 2.1) : m === 15 ? 0.7 + 0.3 * Math.sin(time * 9 + wy * 8) : 1;
+      if (m === 13) { // inscribed stone: lines of glowing script on dark stone, not a glowing slab
+        const line = wy * 2.4, u = (wx + wz) * 1.6, inScript = line - Math.floor(line) < 0.42 && hash2(Math.floor(u), Math.floor(line)) > 0.3 && wy > 0.4 && wy < 3.2;
+        if (!inScript) { al = ALB[2]; pulse = 0; material[i] = 2; } else k = 1;
+      }
+      radiance[o] = (al[0] * k * (amb[0] + LC[0] * lit + E[0] + rim + lan * (env.lantern ? env.lantern.color[0] : 0)) + em[0] * pulse) * exp;
+      radiance[o + 1] = (al[1] * k * (amb[1] + LC[1] * lit + E[1] + rim + lan * (env.lantern ? env.lantern.color[1] : 0)) + em[1] * pulse) * exp;
+      radiance[o + 2] = (al[2] * k * (amb[2] + LC[2] * lit + E[2] + rim + lan * (env.lantern ? env.lantern.color[2] : 0)) + em[2] * pulse) * exp;
     }
   }
 }

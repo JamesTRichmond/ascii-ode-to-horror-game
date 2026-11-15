@@ -9,7 +9,8 @@ import { createSelector, selectGlyphs, appendTrails } from './select.js';
 import { DecayField } from './temporal.js';
 import { getMesh, transformMesh } from './meshes.js';
 import { buildWorld, syncWorld } from './world.js';
-import { ET } from '../sim/sim.js';
+import { ET, inShade, solidAt } from '../sim/sim.js';
+import { RULE } from '../sim/chapters.js';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 const norm3 = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
@@ -18,14 +19,14 @@ export const QUALITY = { low: [320, 180, 6000], medium: [400, 225, 9000], high: 
 /** Per-chapter atmosphere. All radiometric values are scene-linear. */
 export const THEMES = {
   1: { ambient: [0.03, 0.04, 0.05], skyTop: [0.003, 0.005, 0.011], skyHorizon: [0.012, 0.02, 0.03], dir: norm3([0.35, 0.7, 0.6]), dirColor: [1.1, 1.25, 1.45], fog: 0.02, fogH: 2.6, fogAmb: [0.012, 0.022, 0.03], stars: 1, body: 'moon', exposure: 1.7 },
-  2: { ambient: [0.014, 0.014, 0.018], skyTop: [0.004, 0.004, 0.01], skyHorizon: [0.02, 0.016, 0.022], dir: norm3([0.5, 0.75, 0.3]), dirColor: [0.3, 0.3, 0.36], fog: 0.014, fogH: 4, fogAmb: [0.014, 0.014, 0.02], stars: 0.6, body: 'moon', exposure: 1.7 },
-  3: { ambient: [0.012, 0.011, 0.01], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.03, fogH: 2.2, fogAmb: [0.014, 0.012, 0.01], stars: 0, exposure: 1.9 },
-  4: { ambient: [0.009, 0.013, 0.011], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.026, fogH: 3, fogAmb: [0.008, 0.016, 0.012], stars: 0, exposure: 1.9 },
-  5: { ambient: [0.0022, 0.0022, 0.003], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.022, fogH: 4, fogAmb: [0.002, 0.002, 0.003], stars: 0, exposure: 2.0 },
+  2: { ambient: [0.04, 0.04, 0.05], skyTop: [0.004, 0.004, 0.01], skyHorizon: [0.02, 0.016, 0.022], dir: norm3([0.5, 0.75, 0.3]), dirColor: [0.7, 0.7, 0.85], fog: 0.014, fogH: 4, fogAmb: [0.014, 0.014, 0.02], stars: 0.6, body: 'moon', exposure: 1.7 },
+  3: { ambient: [0.075, 0.064, 0.05], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.03, fogH: 2.2, fogAmb: [0.014, 0.012, 0.01], stars: 0, exposure: 2.2 },
+  4: { ambient: [0.06, 0.085, 0.07], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.026, fogH: 3, fogAmb: [0.008, 0.016, 0.012], stars: 0, exposure: 1.9 },
+  5: { lantern: 0.3, ambient: [0.006, 0.006, 0.008], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.022, fogH: 4, fogAmb: [0.002, 0.002, 0.003], stars: 0, exposure: 2.0 },
   6: { ambient: [0.03, 0.022, 0.02], skyTop: [0.02, 0.012, 0.02], skyHorizon: [0.09, 0.04, 0.025], dir: norm3([-0.8, 0.3, 0.2]), dirColor: [0.5, 0.3, 0.18], fog: 0.03, fogH: 3.5, fogAmb: [0.05, 0.028, 0.02], stars: 0.2, exposure: 1.5 },
-  7: { ambient: [0.03, 0.027, 0.018], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.03, fogH: 5, fogAmb: [0.03, 0.026, 0.014], stars: 0, exposure: 1.6 },
+  7: { ambient: [0.06, 0.054, 0.04], skyTop: [0, 0, 0], skyHorizon: [0, 0, 0], dir: [0, 1, 0], dirColor: [0, 0, 0], fog: 0.03, fogH: 5, fogAmb: [0.03, 0.026, 0.014], stars: 0, exposure: 1.6 },
   8: { ambient: [0.03, 0.026, 0.03], skyTop: [0.02, 0.025, 0.05], skyHorizon: [0.25, 0.14, 0.07], dir: norm3([0.9, 0.22, 0.05]), dirColor: [0.8, 0.55, 0.3], fog: 0.012, fogH: 3, fogAmb: [0.05, 0.035, 0.03], stars: 0.15, body: 'sun', exposure: 1.3 },
-  9: { ambient: [0.09, 0.09, 0.085], skyTop: [0.12, 0.16, 0.22], skyHorizon: [0.5, 0.45, 0.36], dir: norm3([-0.3, 0.8, -0.4]), dirColor: [1.3, 1.2, 1.0], fog: 0.016, fogH: 3, fogAmb: [0.16, 0.15, 0.13], stars: 0, body: 'sun', exposure: 1.0 },
+  9: { lantern: 0.15, ambient: [0.09, 0.09, 0.085], skyTop: [0.12, 0.16, 0.22], skyHorizon: [0.5, 0.45, 0.36], dir: norm3([-0.3, 0.8, -0.4]), dirColor: [1.3, 1.2, 1.0], fog: 0.016, fogH: 3, fogAmb: [0.16, 0.15, 0.13], stars: 0, body: 'sun', exposure: 1.0 },
 };
 const MESH_OF = { [ET.FORSAKER]: 'forsaker', [ET.CROWNED]: 'crowned', [ET.TRAMPLER]: 'trampler', [ET.MIRTH]: 'mirth', [ET.TRIUNE]: 'triune', [ET.HUSK]: 'husk', [ET.BUILDER]: 'builder', [ET.MARCHER]: 'marcher', [ET.CHORISTER]: 'chorister', [ET.COMER]: 'comer', [ET.SLUMBERER]: 'slumberer' };
 const UNIT_M = CELL / 1024; // simulation units -> metres
@@ -40,6 +41,17 @@ export function createPipeline(atlas, noise, quality = 'high') {
     env: null,
   };
   return pl;
+}
+
+/** Dawn chapters: the shadow mask comes from the simulation's own shelter rule (inShade), one value per cell,
+ *  so a player standing in visible shade is always sheltered and vice versa. Solid cells stay lit. */
+export function shelterShadow(sim, out) {
+  const T = TEXELS_PER_CELL, tw = sim.w * T;
+  for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) {
+    const v = !solidAt(sim, x, z) && inShade(sim, x, z) ? 0 : 1;
+    for (let j = 0; j < T; j++) out.fill(v, (z * T + j) * tw + x * T, (z * T + j) * tw + x * T + T);
+  }
+  return out;
 }
 
 export function setScene(pl, sim) {
@@ -83,7 +95,7 @@ export function renderFrame(pl, view, dt) {
   for (let z = 0; z < world.h; z++) for (let x = 0; x < world.w; x++) { const s = world.floorH[z * world.w + x] > 1.6 ? 1 : 0; for (let j = 0; j < T; j++) c.solid.fill(s, (z * T + j) * c.tw + x * T, (z * T + j) * c.tw + x * T + T); }
   const p = sim.p; pl.humLevel += ((p.hum ? 1 : 0) - pl.humLevel) * Math.min(1, dt * 6); pl.flash *= Math.exp(-dt / 0.35);
   const hum = pl.humLevel * (1.5 + 0.35 * Math.sin(time * 9)) + pl.flash * 6;
-  addEmitter(c, view.x, view.z, 1.2, [0.04 + 0.5 * hum, 0.05 + 1.3 * hum, 0.06 + 1.2 * hum], tm);
+  addEmitter(c, view.x, view.z, 1.2, [0.12 + 0.5 * hum, 0.14 + 1.3 * hum, 0.16 + 1.2 * hum], tm); // the singer always carries a faint presence
   if (p.flame) addEmitter(c, view.x + cam.fx * 0.6, view.z + cam.fz * 0.6, 1.0, [1.5, 0.66, 0.16].map(v => v * (0.85 + 0.15 * Math.sin(time * 11))), tm);
   for (const m of sim.picks) if (!m.taken) addEmitter(c, m.x * UNIT_M, m.z * UNIT_M, 0.9, [0.35, 1.05, 1.2], tm);
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) { const t = sim.tiles[z * sim.w + x], i = z * sim.w + x;
@@ -93,9 +105,14 @@ export function renderFrame(pl, view, dt) {
   const surge = sim.def.dawn ? (sim.c.stage === 2 ? 1 : sim.c.stage === 1 ? 0.35 : 0.08) : 0;
   const sky = th.skyHorizon.map((v, k) => v * 0.6 + th.ambient[k] + surge * [1.6, 1.0, 0.5][k]);
   solveCascades(c, { sigma: th.fog * tm * pl.opts.fogScale, sky, bounces: pl.opts.bounces, albedo: 0.5, gain: 0.8 });
-  if (world.dirty) { if (th.dirColor[0] > 0) directionalShadow(world, th.dir, pl.shadow); world.dirty = false; }
+  if (world.dirty) {
+    if (sim.def.rule & RULE.DAWN) shelterShadow(sim, pl.shadow); // the shade drawn is exactly the shade that protects
+    else if (th.dirColor[0] > 0) directionalShadow(world, th.dir, pl.shadow);
+    world.dirty = false;
+  }
   const apart = sim.def.glory && sim.c.phase === 1 ? 2.2 : 1, dirK = sim.def.dawn ? 0.25 + surge * 2.2 : 1;
-  const env = pl.env = { ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure, stars: th.stars, dt };
+  const lantern = { intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
+  const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure, stars: th.stars, dt };
   shade(gb, cam, env); const t2 = now(); ms.light = t2 - t1;
   fog.sigma = th.fog * pl.opts.fogScale * apart; fog.height = th.fogH; fog.ambient = th.fogAmb.map(v => v * (1 + surge * 3)); fog.blobs = blobs.length ? blobs : null;
   integrateFog(fog, gb, cam, env, pl.noise); compositeFog(fog, gb); const t3 = now(); ms.fog = t3 - t2;

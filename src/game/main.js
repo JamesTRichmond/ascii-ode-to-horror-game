@@ -16,7 +16,7 @@ import { createAudio } from './audio.js';
 import { loadSave, storeSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 const U = CELL / 1024, $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
 const G = { mode: 'boot', chapter: 0, sim: null, prev: null, acc: 0, last: 0, pl: null, out: null, atlas: null, noise: null, atlasImage: null, atlasPx: null, save: loadSave(), log: [], seed: +(params.get('seed') || 100), bot: null, frames: [], switchRates: [], hud: createHud(), audio: createAudio(), input: null, bob: 0, hurtFlash: 0, cpu: null };
 const S = () => G.save.settings;
@@ -107,7 +107,7 @@ function present(e) {
     case 'surge': hud.alert('THE DAWN', 1.5); break;
     case 'marked': hud.alert('THEY HAVE SEEN A SCORNER', 2); break;
     case 'brazier': burst(pl, x, 1.4, z, 50, 2.5, GOLDC, 1.3); hud.alert(`FLAME WROUGHT · ${e.a}/${G.sim.braziers}`); break;
-    case 'gutter': hud.alert('YOUR VOICE GUTTERS THE FLAME', 2); break;
+    case 'gutter': hud.alert('YOUR VOICE GUTTERS THE FLAME — RELIGHT WHERE YOU BEGAN', 2.6); break;
     case 'relight': hud.alert('THE FLAME RETURNS', 1.5); break;
     case 'gasp': hud.alert('YOU GASP', 1.2); break;
     case 'wake': burst(pl, x, 0.6, z, 20, 1.5, GOLDC, 1.2); hud.alert('THE SLEEPER STIRS', 1.2); break;

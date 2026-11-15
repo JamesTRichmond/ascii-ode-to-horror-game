@@ -54,11 +54,11 @@ A flood-fill distance field from the last loud position lets listeners path to *
 |---|---|---|---|---|---|
 | Forsaker | 1 | 11 | 14 | Hearing ×1.0; recoils from a hum within ~2 cells | 2 hits unwrite |
 | The Crowned | 2 | 19 | 22 | Always knows where you are | Stagger only |
-| Trampler ×3 | 2 (after last measure) | 34 | 30 | Always knows | Stagger only |
+| Trampler ×3 | 2 (after last measure; spawn in the start room) | 22 (slower than walking: you outrun them) | 30 | Always knows | Stagger only |
 | Sigh | 3 | 8, passes through walls | 0; drains 5 Breath/tick within 1.75 cells | — | Disperses for 15 s |
 | Mirth | 3 (Babel state only) | 30, in bursts | 12 | Always knows | 1 hit unwrites |
-| The Three-in-One | 4 | 31 | 45 | Hearing ×1.0 (your breathing) | Stagger only |
-| Husk | 4 | 14 | 12 | Wakes if you breathe within 2.2 cells for ~1 s | 1 hit unwrites |
+| The Three-in-One | 4 | 24 | 34 | Hearing ×1.0 (your breathing) | Stagger only |
+| Husk | 4 | 14 | 12 (only once awake) | Wakes if you breathe within 2.2 cells for ~1 s | 1 hit unwrites |
 | Blind Builder | 5 | 17 | 20 | Hearing ×1.3; no sight | Stagger only |
 | The Multitude | 6 | 15 (march) / 23 (turned) | 10 | Turns on a marked scorner within 4 cells | Stagger only (and marks you) |
 | Chorister | 7 (Apart layer only) | 22 | 25 | Line of sight within 7 cells | Stagger only |
@@ -110,6 +110,18 @@ wall that the simulation raises is the same wall the tracer draws and the cascad
 | Arcane / Choir light | Runes `ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊ` and `+ * : ·` | Unwarped, sparse |
 | Water, sand, wood, cloth, bone, gold, ember | Own sets | See `src/shared/materials.js` |
 | Void (fog, sky) | Braille 2×4 sub-cell dither of in-scattered light | Axis-aligned |
+| Distant thin silhouettes | Sextant 2×3 sub-cells, owner-masked | Axis-aligned |
+
+Shape matching is weighted by local contrast: where a leaf has no internal structure, selection is driven by coverage, orientation and stable world-anchored variety instead of forcing the most uniform glyph everywhere.
+
+### 6.2 Light sources
+
+| Source | Model |
+|---|---|
+| Moon / sun / dawn | Directional light with plan-view height-field shadows |
+| The singer's presence | Camera-attached point light (shadow-free by construction) plus a cascade emitter; brightens while humming; warm while carrying the Chapter 5 flame |
+| Hum, measures, braziers, open gates, Choristers, Comers | Emitters injected into the radiance cascades (light walls, fog and bounce) |
+| Inscriptions | Emissive script bands on dark stone |
 
 ## 7. HUD and accessibility
 
@@ -135,7 +147,9 @@ feeds the simulation.
 `localStorage` key `ode.save.v1`: settings, highest unlocked chapter, endings seen, best ticks per
 chapter, and an optional mid-chapter checkpoint that stores the canonical integer state.
 
-## 10. Vertical slice (this phase)
+## 10. Content status
 
-Chapter 1, *Lone Sea-Breakers*, complete: mute start, three measures, Forsakers, stream gate, HUD,
-pause/settings, death and restart, chapter completion.
+| Milestone | Content |
+|---|---|
+| Vertical slice (PR 2) | Chapter 1 complete |
+| Alpha (PR 3a) | All nine chapters, all rules, all threats, both endings; each chapter completed by the deterministic autoplayer in CI |
