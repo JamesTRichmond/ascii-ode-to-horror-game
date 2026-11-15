@@ -9,7 +9,7 @@ poem *Ode*. Nine chapters; chapter *N* is stanza *N*.
 npm start
 ```
 
-Then open `http://localhost:8080/`. No dependencies to install; Node 20+ is only needed for the
+Then open `http://localhost:8080/`. The game has no runtime dependencies; Node 20+ is only needed for the
 local file server, the tests and the atlas baker.
 
 ## Build
@@ -21,8 +21,15 @@ npm run build
 ## Test
 
 ```bash
+npm ci
+```
+
+```bash
 npm test
 ```
+
+`npm ci` installs the test tooling only (`acorn`, used by the hidden-code gate); nothing from
+`node_modules` is shipped.
 
 Browser acceptance (needs a local Playwright with Chromium; not a project dependency):
 

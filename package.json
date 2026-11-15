@@ -26,5 +26,8 @@
     "bench": "node tools/bench.mjs",
     "terminal": "node tools/terminal.mjs",
     "telemetry:report": "node tools/telemetry-report.mjs"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0"
   }
 }
