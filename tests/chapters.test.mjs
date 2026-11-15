@@ -41,3 +41,12 @@ test('both chapter 9 endings emit the completion event the presenter waits for, 
     assert.equal(sim.c.ending, ending); assert.equal(seen.filter(t => t === 'complete').length, 1, `ending ${ending}: one 'complete'`); assert.equal(seen.filter(t => t === 'ending').length, 1);
   }
 });
+
+test('a finished chapter is frozen: further steps change neither the tick nor the state hash', () => {
+  const sim = createSim(0, 7), bot = createBot({ ending: 2 });
+  while (!sim.c.done && !sim.c.dead && sim.tick < 300 * TICK_HZ) step(sim, botInput(bot, sim));
+  assert.ok(sim.c.done, 'chapter 1 completes');
+  const tick = sim.tick, h = hashState(sim);
+  for (let i = 0; i < 30; i++) step(sim, packInput({ f: 1 }));
+  assert.equal(sim.tick, tick); assert.equal(hashState(sim), h);
+});

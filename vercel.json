@@ -4,7 +4,7 @@
   "installCommand": "",
   "outputDirectory": "dist",
   "cleanUrls": true,
-  "git": { "deploymentEnabled": { "main": false } },
+  "git": { "deploymentEnabled": false },
   "headers": [
     {
       "source": "/(.*)",
