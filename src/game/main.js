@@ -15,6 +15,7 @@ import { createInput } from './input.js';
 import { ACTIONS, normalise, rebind, describe, keyName } from './bindings.js';
 import { createHud } from './hud.js';
 import { captionFor, heartbeatCaption } from './soundcaptions.js';
+import { recordGhost, startGhost, stepGhost, ghostPose } from './ghost.js';
 import { createAudio } from './audio.js';
 import { loadSave, storeSave, exportSave, importSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
@@ -81,6 +82,9 @@ function startChapter(index, restored = null, isRestore = !!restored) {
   G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
   setScene(G.pl, G.sim); G.hud.setChapter(G.sim.def, CHAPTERS.length, G.endless); G.hud.closeMenu(); G.hud.show(true); G.mode = 'play'; G.input.enabled = true; G.input.reset();
   if (!isRestore) G.hud.caption(STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
+  // ghost of the best run: only for a fresh campaign attempt with the same seed as the recorded run
+  G.ghost = index >= 0 && !isRestore && S().ghost !== false ? startGhost(G.save.ghosts?.[G.sim.def.id], index, G.runSeed) : null;
+  if (G.ghost) G.hud.alert(`YOUR BEST SELF WALKS WITH YOU · ${(G.ghost.best / TICK_HZ).toFixed(1)}s`, 2.6);
   if (index >= 0 && !isRestore) G.telemetry?.track('chapter_start', { chapter: index + 1 });
   G.audio.start(); G.audio.setChapter?.(G.sim.def.id); G.audio.setRoom?.(G.sim);
 }
@@ -182,6 +186,7 @@ function settingsMenu(back) {
     <label>Hum and hold breath <select data-k="toggleVoice">${opt(false, !!s.toggleVoice, 'hold the key')}${opt(true, !!s.toggleVoice, 'press to toggle')}</select></label>
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
+    <label>Ghost of your best run <select data-k="ghost">${opt(true, s.ghost !== false, 'on')}${opt(false, s.ghost !== false, 'off')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
     <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs')).join('')}</select></label>`,
   [{ label: 'Done', primary: true, action: back }, { label: 'Controls', action: () => controlsMenu(back) }, { label: 'Copy diagnostic report', action: copyDiagnostics }, { label: 'Transfer save', action: () => transferMenu(back) }], 'ODE');
@@ -253,7 +258,10 @@ function completed() {
     G.hud.menu(`VERSE ${depth}`, html`<p class="stanza">${STANZAS[(depth - 1) % STANZAS.length].slice(0, 4).join('\n')}</p><p>Time ${(G.sim.tick / TICK_HZ).toFixed(1)}s · written ${G.sim.p.hp}/${TUNE.hpMax}</p>`, [{ label: `Verse ${depth + 1}`, primary: true, action: () => startEndless(seed, depth + 1, null, mods) }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
   G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.(); const next = G.chapter + 1, secs = (G.sim.tick / TICK_HZ).toFixed(1);
   G.telemetry?.perf(G.pl.quality, G.frames, G.intervals);
-  G.save.unlocked = Math.max(G.save.unlocked, Math.min(CHAPTERS.length, next + 1)); G.save.checkpoint = null; const assisted = (S().speed || 1) < 1, book = assisted ? (G.save.bestAssisted ||= {}) : G.save.best; book[G.sim.def.id] = Math.min(book[G.sim.def.id] ?? 1e9, G.sim.tick); storeSave(G.save); // assisted runs keep their own records
+  G.save.unlocked = Math.max(G.save.unlocked, Math.min(CHAPTERS.length, next + 1)); G.save.checkpoint = null; const assisted = (S().speed || 1) < 1, book = assisted ? (G.save.bestAssisted ||= {}) : G.save.best; /* assisted runs keep their own records */
+  const record = G.sim.tick < (book[G.sim.def.id] ?? 1e9); book[G.sim.def.id] = Math.min(book[G.sim.def.id] ?? 1e9, G.sim.tick);
+  if (record && !assisted && !G.base && !G.bot) (G.save.ghosts ||= {})[G.sim.def.id] = recordGhost(G.chapter, G.runSeed, G.log, G.sim.tick); // a whole unassisted run from tick 0 becomes the new ghost
+  storeSave(G.save);
   const stanza = html`<p class="stanza">${STANZAS[G.sim.def.id - 1].join('\n')}</p><p>Time ${secs}s · written ${G.sim.p.hp}/${TUNE.hpMax} · state hash ${hashState(G.sim).toString(16)}${assisted ? ` · assist: ${Math.round(S().speed * 100)}% game speed` : ''}</p>`;
   if (G.sim.c.ending) { const sang = G.sim.c.ending === 1; if (!G.save.endings.includes(G.sim.c.ending)) G.save.endings.push(G.sim.c.ending); storeSave(G.save);
     G.hud.menu(sang ? 'YOU SING' : 'YOU ARE SILENT', html`${stanza}<p>${sang ? 'The sleeper wakes with your face. The Choir is whole again, ceaseless and sorrowless, and there is no one left on the shore to hear it.' : 'You cross without a sound. Behind you they renew the world, in spite of a dreamer who slumbers, and a singer who sings no more.'}</p>`, [{ label: 'Title', primary: true, action: title }], `ENDING ${G.sim.c.ending} OF 2`); return; }
@@ -309,11 +317,12 @@ function frameBody(t) {
       G.prev = snapshot(G.sim); const word = G.bot ? botInput(G.bot, G.sim) : G.input.poll();
       if (G.log.length >= INPUT_CAP) { G.base = { tick: G.sim.tick, state: Array.from(serialize(G.sim)) }; G.log = []; } // re-base instead of truncating
       G.failingInput = word; step(G.sim, word); G.failingInput = null; G.log.push(word); /* the log holds completed ticks only */
-      for (const e of G.sim.events) present(e); G.sim.events.length = 0;
+      for (const e of G.sim.events) present(e); G.sim.events.length = 0; stepGhost(G.ghost);
     }
   }
   const simMs = performance.now() - simT0, alpha = G.mode === 'play' ? Math.min(1, G.acc / TICK) : 1, view = viewOf(G.prev, G.sim, alpha), p = G.sim.p;
   if (G.mode === 'photo') { photoMove(elapsed); Object.assign(view, { x: G.photo.x, z: G.photo.z, y: G.photo.y, yaw: G.photo.yaw, fov: G.photo.fov, hold: 0 }); }
+  if (G.ghost) view.ghost = ghostPose(G.ghost, alpha, U);
   G.bob += elapsed * (p.hold ? 4 : 9) * (ticks && (G.prev.p.x !== p.x || G.prev.p.z !== p.z) ? 1 : 0); view.bob = Math.sin(G.bob) * 1.6;
   const dt = G.mode === 'play' ? elapsed : 0; renderFrame(G.pl, view, dt);
   G.hurtFlash *= Math.exp(-elapsed / 0.25); const bg = [3 / 255 + G.hurtFlash * 0.25, 5 / 255, 11 / 255];

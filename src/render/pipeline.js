@@ -116,6 +116,7 @@ export function renderFrame(pl, view, dt) {
     const stag = e.mode === 8, husk = e.type === ET.HUSK && e.mode === 0;
     draw('e' + k, MESH_OF[e.type], e.x, husk ? 0.45 : 0, e.z, e.yaw, { sway: stag ? 0.09 : e.type === ET.SLUMBERER ? 0 : 0.028, phase: k * 1.7, squash: stag ? 0.86 : 1 });
   });
+  if (view.ghost && Math.hypot(view.ghost.x - cam.x, view.ghost.z - cam.z) > 1.2) draw('ghost', 'ghost', view.ghost.x, 0, view.ghost.z, view.ghost.yaw, { sway: 0.02, phase: 0.7 }); // ghost of the best run; hidden while it shares the player's space
   sim.picks.forEach((m, k) => { if (!m.taken) draw('m' + k, 'measure', m.x * UNIT_M, 1.25 + Math.sin(time * 1.3 + k) * 0.12, m.z * UNIT_M, time * 0.9 + k, { scale: 0.9 }); });
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) if (sim.tiles[z * sim.w + x] === 66 && sim.dyn[z * sim.w + x]) draw('b' + (z * sim.w + x), 'flame', (x + 0.5) * CELL, 0.9, (z + 0.5) * CELL, time * 0.6, { sway: 0.08, phase: x });
   if (th.body) draw('sky', th.body, cam.x + th.dir[0] * 320, cam.y + th.dir[1] * 320, cam.z + th.dir[2] * 320, 0, { scale: th.body === 'sun' ? 30 : 15 });
@@ -132,6 +133,7 @@ export function renderFrame(pl, view, dt) {
   addEmitter(c, view.x, view.z, 1.2, [0.12 + 0.5 * hum, 0.14 + 1.3 * hum, 0.16 + 1.2 * hum], tm); // the singer always carries a faint presence
   if (p.flame) addEmitter(c, view.x + cam.fx * 0.6, view.z + cam.fz * 0.6, 1.0, [1.5, 0.66, 0.16].map(v => v * (0.85 + 0.15 * Math.sin(time * 11))), tm);
   for (const m of sim.picks) if (!m.taken) addEmitter(c, m.x * UNIT_M, m.z * UNIT_M, 0.9, [0.35, 1.05, 1.2], tm);
+  if (view.ghost) addEmitter(c, view.ghost.x, view.ghost.z, 0.8, [0.12, 0.4, 0.45], tm);
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) { const t = sim.tiles[z * sim.w + x], i = z * sim.w + x;
     if (t === 66 && sim.dyn[i]) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) addEmitter(c, (x + 0.5 + ox * 0.75) * CELL, (z + 0.5 + oz * 0.75) * CELL, 0.8, [2.6, 1.2, 0.3], tm);
     if (t === 88 && sim.c.gateOpen) addEmitter(c, (x + 0.5) * CELL, (z + 0.5) * CELL, 1.2, [0.5, 1.5, 1.7], tm); }
