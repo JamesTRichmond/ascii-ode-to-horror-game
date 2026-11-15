@@ -36,7 +36,7 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
       stack: String(error?.stack || '').split('\n').slice(0, 12).map(l => l.replace(/https?:\/\/[^/\s)]+/g, '')).join('\n'),
       chapter: st.chapter ?? null, endless: st.endless ?? null, seed: st.seed ?? null, tick: st.tick ?? null, hash: st.hash ?? null,
       inputsFrom: st.log ? Math.max(0, st.log.length - INPUT_CAP) : 0, inputs: st.log ? encodeInputs(st.log.slice(-INPUT_CAP)) : [],
-      tier: st.tier ?? null, userAgentFamily: /Firefox\//.test(navigator.userAgent) ? 'firefox' : /Chrome\//.test(navigator.userAgent) ? 'chromium' : /Safari\//.test(navigator.userAgent) ? 'webkit' : 'other',
+      tier: st.tier ?? null, userAgentFamily: uaFamily(globalThis.navigator?.userAgent),
     };
     push(T.crashes, report, 5); emit('crash', { message: report.message, chapter: report.chapter, tick: report.tick });
     return report;
@@ -54,6 +54,9 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
 export async function loadTelemetryConfig() {
   try { const r = await fetch('telemetry.json', { cache: 'no-store' }); if (!r.ok) return null; const c = await r.json(); return typeof c.endpoint === 'string' && /^\/|^https:\/\//.test(c.endpoint) ? c : null; } catch { return null; }
 }
+
+/** Browser family only; 'other' when there is no navigator (Node 20 and earlier) or no recognisable agent. */
+function uaFamily(ua = '') { return /Firefox\//.test(ua) ? 'firefox' : /Chrome\//.test(ua) ? 'chromium' : /Safari\//.test(ua) ? 'webkit' : 'other'; }
 
 /** Run-length encode a tick-indexed input log: [word, count, word, count, ...]. */
 export function encodeInputs(log) { const out = []; for (const w of log) { if (out.length && out[out.length - 2] === w) out[out.length - 1]++; else out.push(w, 1); } return out; }
