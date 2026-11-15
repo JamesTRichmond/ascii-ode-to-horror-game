@@ -66,10 +66,11 @@ function startChapter(index, restored = null, isRestore = !!restored) {
 }
 function pause() {
   if (G.mode !== 'play') return; G.mode = 'pause'; G.input.enabled = false; document.exitPointerLock?.();
-  G.hud.menu('PAUSED', `<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Restart chapter', action: restart }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, endless: G.endless, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
+  G.hud.menu('PAUSED', `<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: G.endless ? 'Restart run' : 'Restart chapter', action: restart }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, endless: G.endless, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
 }
 const pause0 = () => { G.mode = 'play'; pause(); };
-function restart() { if (G.endless) startEndless(G.endless.seed, G.endless.depth); else startChapter(G.chapter); }
+/** Voluntary restart. Endless is one life per run, so it begins again at verse 1; crash recovery is separate (recoverFromCrash). */
+function restart() { if (G.endless) startEndless(G.endless.seed, 1); else startChapter(G.chapter); }
 function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; G.input.reset(); G.last = 0; }
 /** Day-one patch readiness: compare the running build with the deployed version.json (same origin, no tracking). */
 async function checkForUpdate() {
@@ -124,7 +125,11 @@ async function copyDiagnostics() {
 function crashed(report) {
   if (G.mode === 'crashed') return; cancelDeferred(); G.mode = 'crashed'; G.input.enabled = false; document.exitPointerLock?.(); G.save.lastCrash = { at: report.at, message: report.message, chapter: report.chapter }; storeSave(G.save);
   G.hud.menu('SOMETHING BROKE', `<p>The game hit an error and stopped this chapter. Your saved progress is safe.</p><p>The report below contains the chapter, seed and your inputs so the bug can be replayed exactly. It contains nothing about you.</p><p><code>${String(report.message).replace(/[<>&]/g, '')}</code></p>`,
-    [{ label: 'Copy crash report', primary: true, action: async () => { try { await navigator.clipboard.writeText(JSON.stringify(report)); G.hud.alert('CRASH REPORT COPIED', 2); } catch { console.info(JSON.stringify(report)); } } }, { label: 'Restart chapter', action: () => { G.mode = 'play'; restart(); } }, { label: 'Title', action: title }], 'ERROR');
+    [{ label: 'Copy crash report', primary: true, action: async () => { try { await navigator.clipboard.writeText(JSON.stringify(report)); G.hud.alert('CRASH REPORT COPIED', 2); } catch { console.info(JSON.stringify(report)); } } }, { label: G.endless ? 'Restart verse' : 'Restart chapter', action: recoverFromCrash }, { label: 'Title', action: title }], 'ERROR');
+}
+/** Crash recovery: the same chapter, or the same Endless verse (unlike the pause menu's one-life 'Restart run'). */
+function recoverFromCrash() {
+  G.mode = 'play'; if (G.endless) startEndless(G.endless.seed, G.endless.depth); else startChapter(G.chapter);
 }
 function died() {
   if (G.endless) { const d = G.endless.depth - 1; G.save.endlessBest = Math.max(G.save.endlessBest || 0, d); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); // a campaign save survives an Endless run G.telemetry?.track('endless_end', { depth: d }); G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.();
