@@ -5,6 +5,7 @@ import { parseAtlas } from '../render/atlas.js';
 import { createPipeline, setScene, adoptScene, renderFrame, burst, QUALITY, configureRenderer, rendererMode, restartWorker } from '../render/client.js';
 import { createGLOutput } from '../render/output_gl.js';
 import { compositeCPU, debugImage } from '../render/output_cpu.js';
+import { CVD_MODES, correction, columnMajor, correctHex } from '../render/cvd.js';
 import { CELL } from '../render/gbuffer.js';
 import { createSim, step, serialize, deserialize, hashState, TICK_HZ, ET, TUNE } from '../sim/sim.js';
 import { CHAPTERS, STANZAS } from '../sim/chapters.js';
@@ -43,6 +44,9 @@ function applySettings() {
   const thread = s.renderThread === 'worker' && G.out && !s.debug ? 'worker' : 'local';
   if (thread !== rendererMode()) { configureRenderer(thread, G.raw, e => crashed(G.telemetry ? G.telemetry.crash(Object.assign(new Error(e.message), { stack: e.stack }), 'worker') : { message: e.message })); G.pl = null; }
   setTier(G.auto ? G.auto.tier : s.quality);
+  // colour-vision correction: one matrix for the scene (GPU and CPU paths) and the same mapping for HUD colours
+  const mode = CVD_MODES.includes(s.cvd) ? s.cvd : 'off', C = correction(mode); G.cvd = mode === 'off' ? null : C; G.out?.setCvd?.(columnMajor(C));
+  for (const [v, base, hi] of [['--red', '#ff6b5e', '#ff8a80'], ['--cyan', '#7fe3d4', '#99ffff'], ['--gold', '#e9c46a', '#ffe08a']]) { if (mode === 'off') root.style.removeProperty(v); else root.style.setProperty(v, correctHex(s.contrast ? hi : base, mode)); } // the stylesheet palette (incl. high contrast) when off
   G.pl.opts.reducedMotion = !!s.reducedMotion; G.hud.still = !!s.reducedMotion; storeSave(G.save);
 }
 function setTier(tier) {
@@ -138,6 +142,7 @@ function settingsMenu(back) {
     <label>Render thread <select data-k="renderThread">${opt('worker', s.renderThread || 'worker', 'worker (frees the main thread)')}${opt('local', s.renderThread, 'main thread')}</select></label>
     <label>Reduced motion <select data-k="reducedMotion">${opt(false, s.reducedMotion, 'off')}${opt(true, s.reducedMotion, 'on')}</select></label>
     <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%')).join('')}</select></label>
+    <label>Colour vision <select data-k="cvd">${[['off', 'standard'], ['protan', 'protanopia (red-weak)'], ['deutan', 'deuteranopia (green-weak)'], ['tritan', 'tritanopia (blue-weak)']].map(([v, t]) => opt(v, s.cvd || 'off', t)).join('')}</select></label>
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
     <label>Captions <select data-k="captions">${opt(true, s.captions, 'on')}${opt(false, s.captions, 'off')}</select></label>
     <label>Sound captions (direction and distance) <select data-k="soundCaptions">${opt(false, !!s.soundCaptions, 'off')}${opt(true, !!s.soundCaptions, 'on')}</select></label>
@@ -280,7 +285,7 @@ function frameBody(t) {
   const dt = G.mode === 'play' ? elapsed : 0; renderFrame(G.pl, view, dt);
   G.hurtFlash *= Math.exp(-elapsed / 0.25); const bg = [3 / 255 + G.hurtFlash * 0.25, 5 / 255, 11 / 255];
   if (G.out) G.out.draw(G.pl.sel.inst, G.pl.sel.count, G.pl.w, G.pl.h, bg);
-  else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx); c.ctx.putImageData(c.img, 0, 0); }
+  else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx, undefined, G.cvd); c.ctx.putImageData(c.img, 0, 0); }
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
   G.hud.update(G.sim, elapsed, S().captions);
   if (S().soundCaptions) { G.heartCue = (G.heartCue || 0) - elapsed; if (G.mode === 'play' && G.heartCue <= 0) { G.heartCue = 0.9; G.hud.sound(heartbeatCaption(G.sim)); } } G.hud.renderSounds(S().soundCaptions ? elapsed : 99); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
