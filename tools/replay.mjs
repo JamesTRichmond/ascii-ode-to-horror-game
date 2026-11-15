@@ -12,6 +12,9 @@ import { endlessVerse } from '../src/sim/endless.js';
 import { decodeInputs } from '../src/game/telemetry.js';
 
 export function replayReport(r, opts = {}) {
+  if (!r || typeof r !== 'object') throw new Error('report is not an object');
+  if (!r.endless && !(Number.isInteger(r.chapter) && r.chapter >= 1 && r.chapter <= 9)) throw new Error(`chapter must be 1-9 (or endless {seed, depth}), got ${r.chapter}`);
+  const rle = r.inputs ?? []; if (!Array.isArray(rle) || rle.length % 2 || rle.some((v, k) => !Number.isInteger(v) || (k % 2 === 1 && v < 1))) throw new Error('inputs must be run-length pairs of integers [word, count >= 1, ...]');
   const def = r.endless ? endlessVerse(r.endless.seed, r.endless.depth) : r.chapter - 1;
   let sim;
   if (r.base?.state) { // the log starts at base.tick: a restored checkpoint, or a re-based long session
@@ -32,7 +35,9 @@ export function replayReport(r, opts = {}) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) { // exact entry point, any OS
   const file = process.argv[2]; if (!file) { console.error('usage: node tools/replay.mjs <report.json> [--until tick] [--trace]'); process.exit(2); }
   let r; try { r = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error('cannot read report:', e.message); process.exit(2); }
-  const i = process.argv.indexOf('--until'), out = replayReport(r, { until: i > 0 ? +process.argv[i + 1] : undefined, trace: process.argv.includes('--trace') });
+  const i = process.argv.indexOf('--until'), until = i > 0 ? +process.argv[i + 1] : undefined;
+  if (until !== undefined && !(Number.isInteger(until) && until >= 0)) { console.error('--until needs a tick number'); process.exit(2); }
+  let out; try { out = replayReport(r, { until, trace: process.argv.includes('--trace') }); } catch (e) { console.error('cannot replay report:', e?.message || e); process.exit(2); } // bad input, not divergence
   console.log(JSON.stringify({ chapter: r.chapter, endless: r.endless, seed: r.seed, replayedTicks: out.tick, hash: out.hash.toString(16), done: out.done, dead: out.dead, ...('threw' in out ? { failingInputThrew: out.threw } : {}) }));
   if (out.events.length) for (const e of out.events) console.log(e.tick, e.type, e.a);
   const expectHash = r.hash ?? r.expect?.hash, expectTick = r.tick ?? r.expect?.tick;
