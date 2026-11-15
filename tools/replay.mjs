@@ -24,13 +24,20 @@ export function replayReport(r, opts = {}) {
     if (r.inputsFrom) throw new Error(`report starts at tick ${r.inputsFrom} with no base state; the log was truncated and cannot be replayed from the chapter start`);
     sim = createSim(def, r.seed);
   }
-  const inputs = decodeInputs(r.inputs || []), until = opts.until ?? inputs.length, events = [];
-  for (let i = 0; i < Math.min(until, inputs.length); i++) { step(sim, inputs[i]); if (opts.trace) for (const e of sim.events) events.push({ tick: sim.tick, type: e.type, a: e.a }); sim.events.length = 0; }
-  const out = { sim, tick: sim.tick, hash: hashState(sim) >>> 0, done: sim.c.done, dead: sim.c.dead, events };
+  // opts.until is an absolute tick: replay stops before stepping past it (a base state can start the log mid-run)
+  const inputs = decodeInputs(r.inputs || []), events = []; let i = 0;
+  for (; i < inputs.length && (opts.until == null || sim.tick < opts.until); i++) { step(sim, inputs[i]); if (opts.trace) for (const e of sim.events) events.push({ tick: sim.tick, type: e.type, a: e.a }); sim.events.length = 0; }
+  const out = { sim, tick: sim.tick, hash: hashState(sim) >>> 0, done: sim.c.done, dead: sim.c.dead, events, partial: i < inputs.length };
   // a report from a throwing step: after the completed ticks, apply the failing word once to reproduce the exception
   // (null = it no longer throws). Measured values above are taken first, at the replay boundary.
-  if (r.failingInput != null && opts.until == null) { try { step(sim, r.failingInput); out.threw = null; } catch (e) { out.threw = String(e?.message || e); } }
+  if (r.failingInput != null && !out.partial) { try { step(sim, r.failingInput); out.threw = null; } catch (e) { out.threw = String(e?.message || e); } }
   return out;
+}
+/** What a report expects: a fixture's expect block (the fixed run) first, then the crash's own tick/hash. Hashes are
+ *  normalised once to unsigned 32-bit (numbers, or hex strings as printed by this tool). Each field is optional. */
+export function expectations(r) {
+  const x = r.expect || {}, h = x.hash ?? r.hash, hash = h == null ? null : (typeof h === 'string' ? parseInt(h, 16) : h) >>> 0;
+  return { tick: x.tick ?? r.tick ?? null, hash, done: x.done ?? null, dead: x.dead ?? null };
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) { // exact entry point, any OS
   const file = process.argv[2]; if (!file) { console.error('usage: node tools/replay.mjs <report.json> [--until tick] [--trace]'); process.exit(2); }
@@ -40,7 +47,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   let out; try { out = replayReport(r, { until, trace: process.argv.includes('--trace') }); } catch (e) { console.error('cannot replay report:', e?.message || e); process.exit(2); } // bad input, not divergence
   console.log(JSON.stringify({ chapter: r.chapter, endless: r.endless, seed: r.seed, replayedTicks: out.tick, hash: out.hash.toString(16), done: out.done, dead: out.dead, ...('threw' in out ? { failingInputThrew: out.threw } : {}) }));
   if (out.events.length) for (const e of out.events) console.log(e.tick, e.type, e.a);
-  const expectHash = r.expect?.hash ?? r.hash, expectTick = r.expect?.tick ?? r.tick; // a fixture's expect block (the fixed run) wins over the crash's own tick/hash
-  if (expectHash != null && (out.hash !== (typeof expectHash === 'string' ? parseInt(expectHash, 16) : expectHash) >>> 0 || (expectTick != null && out.tick !== expectTick))) { console.error(`DIVERGED: expected tick ${expectTick} hash ${Number(expectHash).toString(16)}`); process.exit(1); }
-  console.log(expectHash != null ? 'REPRODUCED' : 'REPLAYED');
+  if (out.partial) { console.log(`REPLAYED (partial: stopped at tick ${out.tick}; expectations apply to a full replay)`); process.exit(0); }
+  const e = expectations(r), bad = [];
+  if (e.tick != null && out.tick !== e.tick) bad.push(`tick ${out.tick}, expected ${e.tick}`);
+  if (e.hash != null && out.hash !== e.hash) bad.push(`hash ${out.hash.toString(16)}, expected ${e.hash.toString(16)}`);
+  for (const k of ['done', 'dead']) if (e[k] != null && out[k] !== e[k]) bad.push(`${k} ${out[k]}, expected ${e[k]}`);
+  if (bad.length) { console.error('DIVERGED: ' + bad.join('; ')); process.exit(1); }
+  console.log(e.tick != null || e.hash != null ? 'REPRODUCED' : 'REPLAYED');
 }
