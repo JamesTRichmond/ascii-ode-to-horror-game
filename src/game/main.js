@@ -16,6 +16,7 @@ import { ACTIONS, normalise, rebind, describe, keyName } from './bindings.js';
 import { createHud } from './hud.js';
 import { captionFor, heartbeatCaption } from './soundcaptions.js';
 import { recordGhost, startGhost, stepGhost, ghostPose } from './ghost.js';
+import { createRun, formatTicks, formatDelta } from './splits.js';
 import { createAudio } from './audio.js';
 import { loadSave, storeSave, exportSave, importSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
@@ -85,6 +86,7 @@ function startChapter(index, restored = null, isRestore = !!restored) {
   // ghost of the best run: only for a fresh campaign attempt with the same seed as the recorded run
   G.ghost = index >= 0 && !isRestore && S().ghost !== false ? startGhost(G.save.ghosts?.[G.sim.def.id], index, G.runSeed) : null;
   if (G.ghost) G.hud.alert(`YOUR BEST SELF WALKS WITH YOU · ${(G.ghost.best / TICK_HZ).toFixed(1)}s`, 2.6);
+  G.run = index >= 0 && !isRestore ? createRun(G.save.splits?.[G.sim.def.id]) : null; // a resumed run is untimed (its early splits are gone)
   if (index >= 0 && !isRestore) G.telemetry?.track('chapter_start', { chapter: index + 1 });
   G.audio.start(); G.audio.setChapter?.(G.sim.def.id); G.audio.setRoom?.(G.sim);
 }
@@ -187,6 +189,7 @@ function settingsMenu(back) {
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
     <label>Ghost of your best run <select data-k="ghost">${opt(true, s.ghost !== false, 'on')}${opt(false, s.ghost !== false, 'off')}</select></label>
+    <label>Speedrun timer and splits <select data-k="speedrun">${opt(false, !!s.speedrun, 'off')}${opt(true, !!s.speedrun, 'on')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
     <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs')).join('')}</select></label>`,
   [{ label: 'Done', primary: true, action: back }, { label: 'Controls', action: () => controlsMenu(back) }, { label: 'Copy diagnostic report', action: copyDiagnostics }, { label: 'Transfer save', action: () => transferMenu(back) }], 'ODE');
@@ -238,6 +241,14 @@ function controlsMenu(back, note = '') {
   };
 }
 const copyDiagnostics = () => copyFromDialog(JSON.stringify(G.telemetry?.report() ?? {}, null, 2), 'Diagnostic report copied.');
+// ---------------------------------------------------------------- speedrun timer (in-game time = simulation ticks)
+function timerEl() { let el = document.getElementById('igt'); if (!el) { el = document.createElement('span'); el.id = 'igt'; el.setAttribute('aria-live', 'off'); document.getElementById('measurePanel')?.append(el); } return el; }
+function updateTimer() { const el = timerEl(), last = G.splitShown; el.hidden = !G.run; if (!G.run) return; const t = formatTicks(G.sim.tick); const text = last && last.until > G.sim.tick ? `${t}  ${last.text}` : t; if (el.textContent !== text) { el.textContent = text; el.className = last && last.until > G.sim.tick ? last.cls : ''; } }
+function showSplit(s) { G.splitShown = { text: `${s.label} ${s.delta === null ? formatTicks(s.tick) : formatDelta(s.delta)}`, cls: s.gold ? 'gold' : s.delta === null ? '' : s.delta <= 0 ? 'ahead' : 'behind', until: G.sim.tick + 3 * TICK_HZ }; }
+function splitsTable(f) {
+  const rows = G.run.splits.map(s => html`<tr class="${s.gold ? 'gold' : s.delta === null ? '' : s.delta <= 0 ? 'ahead' : 'behind'}"><th scope="row">${s.label}</th><td>${formatTicks(s.tick)}</td><td>${s.delta === null ? '—' : formatDelta(s.delta)}</td></tr>`);
+  return html`<table class="splits"><thead><tr><th>Split</th><th>Time</th><th>vs PB</th></tr></thead><tbody>${rows}</tbody></table><p>${f.newPb ? 'NEW PERSONAL BEST · ' : ''}Sum of best ${formatTicks(f.sumOfBest)}</p>`;
+}
 function crashed(report) {
   if (G.mode === 'crashed') return; cancelDeferred(); G.mode = 'crashed'; G.input.enabled = false; document.exitPointerLock?.(); G.save.lastCrash = { at: report.at, message: report.message, chapter: report.chapter }; storeSave(G.save);
   G.hud.menu('SOMETHING BROKE', html`<p>The game hit an error and stopped this chapter. Your saved progress is safe. Restarting rebuilds the renderer; if the error returns, reload the game.</p><p>The report below contains the chapter, seed and your inputs so the bug can be replayed exactly. It contains nothing about you.</p><p><code>${String(report.message)}</code></p>`,
@@ -261,8 +272,9 @@ function completed() {
   G.save.unlocked = Math.max(G.save.unlocked, Math.min(CHAPTERS.length, next + 1)); G.save.checkpoint = null; const assisted = (S().speed || 1) < 1, book = assisted ? (G.save.bestAssisted ||= {}) : G.save.best; /* assisted runs keep their own records */
   const record = G.sim.tick < (book[G.sim.def.id] ?? 1e9); book[G.sim.def.id] = Math.min(book[G.sim.def.id] ?? 1e9, G.sim.tick);
   if (record && !assisted && !G.base && !G.bot) (G.save.ghosts ||= {})[G.sim.def.id] = recordGhost(G.chapter, G.runSeed, G.log, G.sim.tick); // a whole unassisted run from tick 0 becomes the new ghost
+  const runResult = G.run && !G.bot ? G.run.finish(G.sim.tick) : null; if (runResult) (G.save.splits ||= {})[G.sim.def.id] = runResult.record;
   storeSave(G.save);
-  const stanza = html`<p class="stanza">${STANZAS[G.sim.def.id - 1].join('\n')}</p><p>Time ${secs}s · written ${G.sim.p.hp}/${TUNE.hpMax} · state hash ${hashState(G.sim).toString(16)}${assisted ? ` · assist: ${Math.round(S().speed * 100)}% game speed` : ''}</p>`;
+  const stanza = html`<p class="stanza">${STANZAS[G.sim.def.id - 1].join('\n')}</p><p>Time ${secs}s · written ${G.sim.p.hp}/${TUNE.hpMax} · state hash ${hashState(G.sim).toString(16)}${assisted ? ` · assist: ${Math.round(S().speed * 100)}% game speed` : ''}</p>${runResult && S().speedrun ? splitsTable(runResult) : ''}`;
   if (G.sim.c.ending) { const sang = G.sim.c.ending === 1; if (!G.save.endings.includes(G.sim.c.ending)) G.save.endings.push(G.sim.c.ending); storeSave(G.save);
     G.hud.menu(sang ? 'YOU SING' : 'YOU ARE SILENT', html`${stanza}<p>${sang ? 'The sleeper wakes with your face. The Choir is whole again, ceaseless and sorrowless, and there is no one left on the shore to hear it.' : 'You cross without a sound. Behind you they renew the world, in spite of a dreamer who slumbers, and a singer who sings no more.'}</p>`, [{ label: 'Title', primary: true, action: title }], `ENDING ${G.sim.c.ending} OF 2`); return; }
   G.hud.menu(G.sim.def.title.toUpperCase(), stanza, next < CHAPTERS.length ? [{ label: `Continue to chapter ${next + 1}`, primary: true, action: () => startChapter(next) }, { label: 'Title', action: title }] : [{ label: 'Title', primary: true, action: title }], next < CHAPTERS.length ? 'STANZA COMPLETE' : 'END OF THIS BUILD');
@@ -272,6 +284,7 @@ function completed() {
 const CY = [0.5, 1.4, 1.3], RED = [1.6, 0.25, 0.15], PALE = [1.1, 1.05, 0.95], GOLDC = [1.5, 1.1, 0.4];
 function present(e) {
   const pl = G.pl, x = e.x * U, z = e.z * U, hud = G.hud, def = G.sim.def; G.audio.event(e); G.telemetry?.event(e, G.sim); if (S().soundCaptions) hud.sound(captionFor(e, G.sim.p));
+  const split = G.run?.onEvent(e, G.sim.tick); if (split && S().speedrun) showSplit(split);
   switch (e.type) {
     case 'measure': burst(pl, x, 1.2, z, 40, 3.5, CY, 1.1); hud.alert(`A MEASURE RETURNS · ${e.a}/${def.need}`); hud.caption(STANZAS[def.id - 1].slice(2 + e.a * 2 - 2, 2 + e.a * 2 + 2).slice(0, 2)); break;
     case 'hum': burst(pl, x + Math.cos(pl.cam.yaw) * 0.8, 1.2, z + Math.sin(pl.cam.yaw) * 0.8, 5, 1.6, CY, 0.9, pl.cam.yaw); break;
@@ -330,7 +343,7 @@ function frameBody(t) {
   else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx, undefined, G.cvd); c.ctx.putImageData(c.img, 0, 0); }
   if (G.photoShot) { G.photoShot = false; savePhoto($('view')); } // read in the same task as the draw, while the WebGL buffer is valid
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
-  G.hud.update(G.sim, elapsed, S().captions);
+  G.hud.update(G.sim, elapsed, S().captions); if (S().speedrun) updateTimer();
   if (S().soundCaptions) { G.heartCue = (G.heartCue || 0) - elapsed; if (G.mode === 'play' && G.heartCue <= 0) { G.heartCue = 0.9; G.hud.sound(heartbeatCaption(G.sim)); } } G.hud.renderSounds(S().soundCaptions ? elapsed : 99); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
   // rolling statistics: G.frames is CPU work time for this frame, G.intervals the time between frames
   const total = performance.now() - simT0; G.frames.push(total);
