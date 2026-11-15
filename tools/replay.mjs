@@ -5,6 +5,8 @@
 // Reconstructs the chapter (from the serialized base state when the log starts mid-run), replays every input tick-by-tick, and checks the final tick/hash when the
 // report carries them. Exit code 0 = reproduced (or replayed cleanly), 1 = divergence, 2 = bad input.
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createSim, step, hashState, deserialize } from '../src/sim/sim.js';
 import { endlessVerse } from '../src/sim/endless.js';
 import { decodeInputs } from '../src/game/telemetry.js';
@@ -27,7 +29,7 @@ export function replayReport(r, opts = {}) {
   if (r.failingInput != null && opts.until == null) { try { step(sim, r.failingInput); out.threw = null; } catch (e) { out.threw = String(e?.message || e); } }
   return out;
 }
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) { // exact entry point, any OS
   const file = process.argv[2]; if (!file) { console.error('usage: node tools/replay.mjs <report.json> [--until tick] [--trace]'); process.exit(2); }
   let r; try { r = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error('cannot read report:', e.message); process.exit(2); }
   const i = process.argv.indexOf('--until'), out = replayReport(r, { until: i > 0 ? +process.argv[i + 1] : undefined, trace: process.argv.includes('--trace') });
