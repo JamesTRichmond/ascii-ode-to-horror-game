@@ -9,13 +9,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSim, step, hashState, deserialize } from '../src/sim/sim.js';
 import { endlessVerse } from '../src/sim/endless.js';
+import { epilogueDef } from '../src/sim/epilogue.js';
 import { decodeInputs } from '../src/game/telemetry.js';
 
 export function replayReport(r, opts = {}) {
   if (!r || typeof r !== 'object') throw new Error('report is not an object');
-  if (!r.endless && !(Number.isInteger(r.chapter) && r.chapter >= 1 && r.chapter <= 9)) throw new Error(`chapter must be 1-9 (or endless {seed, depth}), got ${r.chapter}`);
+  if (!r.endless && !r.epilogue && !(Number.isInteger(r.chapter) && r.chapter >= 1 && r.chapter <= 9)) throw new Error(`chapter must be 1-9 (or endless {seed, depth}), got ${r.chapter}`);
   const rle = r.inputs ?? []; if (!Array.isArray(rle) || rle.length % 2 || rle.some((v, k) => !Number.isInteger(v) || (k % 2 === 1 && v < 1))) throw new Error('inputs must be run-length pairs of integers [word, count >= 1, ...]');
-  const def = r.endless ? endlessVerse(r.endless.seed, r.endless.depth) : r.chapter - 1;
+  const def = r.epilogue ? epilogueDef() : r.endless ? endlessVerse(r.endless.seed, r.endless.depth) : r.chapter - 1;
   let sim;
   if (r.base?.state) { // the log starts at base.tick: a restored checkpoint, or a re-based long session
     sim = deserialize(Int32Array.from(r.base.state), r.endless ? def : null);
