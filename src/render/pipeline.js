@@ -57,10 +57,19 @@ export function shelterShadow(sim, out) {
 export function setScene(pl, sim) {
   pl.world = buildWorld(sim); pl.cascades = createCascades(sim.w * TEXELS_PER_CELL, sim.h * TEXELS_PER_CELL);
   // static atmosphere: low mist banks over water, settling dust indoors (fog bodies in the heterogeneous field)
-  const mist = []; let k = 0;
-  for (let z = 1; z < sim.h - 1; z += 3) for (let x = 1; x < sim.w - 1; x += 4) {
-    const t = sim.tiles[z * sim.w + x], water = t === 126 || t === 61, open = !sim.def.indoor || t === 46;
-    if ((water || (sim.def.indoor && open)) && (k++ % (water ? 2 : 3)) === 0 && mist.length < 60) mist.push((x + 0.5) * 2, water ? 0.25 : 0.6, (z + 0.5) * 2, water ? 4.5 : 3.5, water ? 0.07 : 0.035);
+  // scan every eligible tile (water anywhere; open floor indoors) and keep blob centres at least MIST_GAP cells
+  // apart, up to an explicit budget: every fog sample loops over these blobs, so the count is a cost bound
+  // candidates are visited water-first, then in a fixed hashed order, so the budget spreads over the whole map
+  const MIST_BUDGET = 16, MIST_GAP = 3, mist = [], cand = [];
+  for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) {
+    const t = sim.tiles[z * sim.w + x], water = t === 126 || t === 61; if (water || (sim.def.indoor && t === 46)) { let n = Math.imul(x, 374761393) + Math.imul(z, 668265263); n = Math.imul(n ^ (n >>> 13), 1274126177); cand.push([water ? 0 : 1, (n ^ (n >>> 16)) >>> 0, x, z, water]); }
+  }
+  cand.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  for (const [, , x, z, water] of cand) {
+    if (mist.length >= MIST_BUDGET * 5) break;
+    const cx = (x + 0.5) * CELL, cz = (z + 0.5) * CELL; let crowded = false;
+    for (let b = 0; b < mist.length; b += 5) if (Math.abs(mist[b] - cx) < MIST_GAP * CELL && Math.abs(mist[b + 2] - cz) < MIST_GAP * CELL) { crowded = true; break; }
+    if (!crowded) mist.push(cx, water ? 0.25 : 0.6, cz, water ? 4.5 : 3.5, water ? 0.07 : 0.035);
   }
   pl.mist = mist;
   pl.shadow = new Uint8Array(pl.cascades.tw * pl.cascades.th).fill(1); pl.instances.clear(); pl.trails.clear(); pl.firstFrame = true; pl.world.dirty = true;

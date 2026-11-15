@@ -41,8 +41,8 @@ export function createAudio() {
     A.chapter = id; if (!A.ready) return;
     if (A.bed) { const old = A.bed; old.out.gain.setTargetAtTime(0, now(), 0.8); setTimeout(() => old.nodes.forEach(n => { try { n.stop(); } catch { /* already stopped */ } }), 4000); }
     const b = BEDS[id] || BEDS[1], out = A.ctx.createGain(), nodes = []; out.gain.value = 0; out.connect(A.master); out.gain.setTargetAtTime(1, now(), 1.2);
-    const lfo = A.ctx.createOscillator(), lfoG = A.ctx.createGain(); lfo.frequency.value = b.lfo; lfoG.gain.value = 0.35; lfo.connect(lfoG); lfo.start(); nodes.push(lfo);
-    b.ratios.forEach((r, i) => { const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = i ? 'sine' : 'sawtooth'; o.frequency.value = b.root * r; o.detune.value = (i - 1) * 4; g.gain.value = i ? 0.035 : 0.025; const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260 + i * 140; o.connect(lp); lp.connect(g); g.connect(out); lfoG.connect(g.gain); o.start(); nodes.push(o); });
+    const lfo = A.ctx.createOscillator(); lfo.frequency.value = b.lfo; lfo.start(); nodes.push(lfo); // depth is set per voice: 35% of that voice's own level
+    b.ratios.forEach((r, i) => { const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.type = i ? 'sine' : 'sawtooth'; o.frequency.value = b.root * r; o.detune.value = (i - 1) * 4; const base = i ? 0.035 : 0.025, depth = A.ctx.createGain(); g.gain.value = base; depth.gain.value = base * 0.35; lfo.connect(depth); const lp = A.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260 + i * 140; o.connect(lp); lp.connect(g); g.connect(out); depth.connect(g.gain); o.start(); nodes.push(o); });
     const n = noise(), nf = A.ctx.createBiquadFilter(), ng = A.ctx.createGain(); nf.type = 'lowpass'; nf.frequency.value = b.noise; ng.gain.value = b.level; n.connect(nf); nf.connect(ng); ng.connect(out); n.start(); nodes.push(n);
     if (b.surf) { const sl = A.ctx.createOscillator(), sg = A.ctx.createGain(); sl.frequency.value = 0.11; sg.gain.value = b.level * 1.6; sl.connect(sg); sg.connect(ng.gain); sl.start(); nodes.push(sl); }
     A.bed = { out, nodes, def: b, beat: 0 };
@@ -65,10 +65,13 @@ export function createAudio() {
   const place = (x, z) => { const L = A.listener, dx = x - L.x, dz = z - L.z, d = Math.hypot(dx, dz) / 1024, side = (-dx * Math.sin(L.yaw) + dz * Math.cos(L.yaw)) / (Math.hypot(dx, dz) || 1); return { pan: side, gain: 1 / (1 + d * 0.35) }; };
 
   /** Per-frame continuous layers: hum level, heartbeat from threat proximity, march pulse. */
-  A.update = (sim, pl, dt) => {
+  /** Stop every continuous layer (hum, heartbeat, march); event stingers are unaffected. */
+  A.silence = () => { if (!A.ready) return; A.hum.g.gain.setTargetAtTime(0, now(), 0.03); A.heart = 0; if (A.bed) A.bed.beat = 0; };
+  A.update = (sim, pl, dt, active = true) => {
     if (!A.ready || !sim) return; const p = sim.p; A.listener = { x: p.x, z: p.z, yaw: (p.ang / 4096) * Math.PI * 2 };
+    if (!active) { A.silence(); return; }
     A.hum.g.gain.setTargetAtTime(p.hum ? 0.12 : 0, now(), 0.06); A.hum.o1.detune.setTargetAtTime(p.breath < 200 ? -30 : 0, now(), 0.2);
-    let near = 1e9; for (const e of sim.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || (e.type === ET.MARCHER && !p.marked) || (e.type === ET.HUSK && e.mode === 0)) continue; near = Math.min(near, Math.hypot(e.x - p.x, e.z - p.z) / 1024); }
+    let near = 1e9; for (const e of sim.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || (e.type === ET.MARCHER && !p.marked) || (e.type === ET.HUSK && e.mode === 0) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && sim.c.phase !== 1)) continue; near = Math.min(near, Math.hypot(e.x - p.x, e.z - p.z) / 1024); }
     const fear = Math.max(0, Math.min(1, 1 - near / 7)), rate = 0.9 + fear * 1.6; A.heart += dt * rate;
     if (fear > 0.05 && A.heart >= 1) { A.heart = 0; A.tone(48, 0.16, 'sine', 0.25 * fear + 0.05); A.tone(44, 0.14, 'sine', 0.18 * fear + 0.04, 0, 0, 0.18); } else if (A.heart >= 1) A.heart = 0;
     const b = A.bed?.def; if (b?.march) { A.bed.beat += dt; if (A.bed.beat >= 0.5) { A.bed.beat = 0; A.hiss(0.09, 180, p.marked ? 0.25 : 0.08); } }
