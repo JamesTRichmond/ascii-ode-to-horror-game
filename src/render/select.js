@@ -37,7 +37,7 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
   const { w, h, gw, atlas, inst, noise, opts, EX, EY } = sel, { depth, material, object, radiance, lum, velocity, normal, tangent } = gb, st = sel.stats;
   const tmp = sel.prev; sel.prev = sel.cur; sel.cur = tmp; const prev = sel.prev, cur = sel.cur; cur.slotOf.fill(-1);
   const dt = env.dt, alpha = responseAlpha(dt, opts.tau), temporal = opts.temporal && dt > 0 && dt < 0.25;
-  let n = 0, switches = 0, valid = 0, rejected = 0, lastGlyph = -1; st.braille = st.sextant = st.matched = 0;
+  let n = 0, switches = 0, valid = 0, rejected = 0; st.braille = st.sextant = st.matched = 0;
   const heat = sel.heat, hd = Math.exp(-dt / 0.6); for (let i = 0; i < heat.length; i++) heat[i] *= hd;
 
   for (let li = 0; li < qt.count; li++) {
@@ -105,13 +105,13 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
       for (let c = 0; c < cand.length; c++) {
         const gi = cand[c], dm = atlas.mean[gi] - target; let e = shapeW * shapeError(V, table, gi, dims) + 4 * dm * dm;
         if (mt.wOrient < 0.5) { const cs = Math.cos(atlas.angle[gi] - tAng); e += mt.wOrient * 0.3 * atlas.aniso[gi] * coh * (1 - cs * cs); } else e -= 0.15 * bias * atlas.aniso[gi];
-        e += hash2(hid, gi) * mt.jitter * 0.22; if (!ok && gi === lastGlyph && mt.jitter > 0.3) e += 0.12;
+        e += hash2(hid, gi) * mt.jitter * 0.22;
         if (e < best) { best = e; glyph = gi; } if (gi === prevGlyph) prevErr = e;
       }
       if (glyph < 0) continue;
       if (ok && !shouldSwitch(ok, best, prevErr, opts.margin)) glyph = prevGlyph;
       else if (ok && glyph !== prevGlyph) { switches++; heat[cell] = 1; }
-      cur.glyph[slot] = glyph; lastGlyph = glyph; st.matched++;
+      cur.glyph[slot] = glyph; st.matched++;
       // --- transform: projection Jacobian of the surface basis, singular values clamped ---
       const hw = lw * 0.5 * EX * mt.scale, hh = lh * 0.5 * EY * mt.scale, jn = hash2(hid, 17), jm = hash2(hid, 91);
       if (mt.warp) {
