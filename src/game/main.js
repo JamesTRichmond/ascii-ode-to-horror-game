@@ -86,9 +86,37 @@ function startChapter(index, restored = null, isRestore = !!restored) {
 }
 function pause() {
   if (G.mode !== 'play') return; G.mode = 'pause'; G.input.enabled = false; document.exitPointerLock?.();
-  G.hud.menu('PAUSED', html`<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: G.endless ? 'Restart run' : 'Restart chapter', action: restart }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, endless: G.endless, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
+  G.hud.menu('PAUSED', html`<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Photo mode', action: enterPhoto }, { label: G.endless ? 'Restart run' : 'Restart chapter', action: restart }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, endless: G.endless, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
 }
 const pause0 = () => { G.mode = 'play'; pause(); };
+// ---------------------------------------------------------------- photo mode: the moment is frozen, the camera is free
+const PHOTO_HELP = 'PHOTO MODE · W A S D move · ← → or drag to turn · R / F raise / lower · [ ] field of view · P capture · H hide this · Esc back';
+function enterPhoto() {
+  const v = viewOf(G.prev, G.sim, 1); G.photo = { x: v.x, z: v.z, y: 1.62, yaw: v.yaw, fov: 74, keys: new Set(), help: true };
+  G.mode = 'photo'; G.hud.closeMenu(); G.hud.show(false); photoHelp().hidden = false; photoHelp().textContent = PHOTO_HELP;
+}
+function exitPhoto() { photoHelp().hidden = true; G.photo = null; G.mode = 'play'; G.hud.show(true); pause(); }
+function photoHelp() { let el = document.getElementById('photoHelp'); if (!el) { el = document.createElement('p'); el.id = 'photoHelp'; el.setAttribute('role', 'status'); el.hidden = true; document.getElementById('app').append(el); } return el; }
+function photoKey(e, down) {
+  if (G.mode !== 'photo') return; const P = G.photo; e.preventDefault();
+  if (!down) { P.keys.delete(e.code); return; } if (e.repeat && !['BracketLeft', 'BracketRight'].includes(e.code)) return;
+  if (e.code === 'Escape') { exitPhoto(); e.stopImmediatePropagation(); return; }
+  if (e.code === 'KeyH') { P.help = !P.help; photoHelp().hidden = !P.help; return; }
+  if (e.code === 'BracketLeft' || e.code === 'BracketRight') { P.fov = Math.max(30, Math.min(110, P.fov + (e.code === 'BracketLeft' ? -4 : 4))); photoHelp().textContent = `${PHOTO_HELP} · FOV ${P.fov}°`; return; }
+  if (e.code === 'KeyP' || e.code === 'Enter') { G.photoShot = true; return; }
+  P.keys.add(e.code);
+}
+/** Move the free camera; it may not leave the map or sink below the floor. */
+function photoMove(dt) {
+  const P = G.photo, k = c => (P.keys.has(c) ? 1 : 0), sp = 3.2 * dt, f = k('KeyW') - k('KeyS'), s = k('KeyD') - k('KeyA');
+  P.yaw += (k('ArrowRight') - k('ArrowLeft')) * 1.6 * dt; const c = Math.cos(P.yaw), n = Math.sin(P.yaw);
+  P.x += (f * c - s * n) * sp; P.z += (f * n + s * c) * sp; P.y = Math.max(0.3, Math.min(9, P.y + (k('KeyR') - k('KeyF')) * sp));
+  const W = G.sim.w * CELL, H = G.sim.h * CELL; P.x = Math.max(0.2, Math.min(W - 0.2, P.x)); P.z = Math.max(0.2, Math.min(H - 0.2, P.z));
+}
+function savePhoto(canvas) {
+  canvas.toBlob(b => { if (!b) return; const a = document.createElement('a'), url = URL.createObjectURL(b), d = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19); a.href = url; a.download = `ode-ch${G.sim.def.id}-${d}.png`; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); }, 'image/png');
+  G.hud.alert?.('CAPTURED', 1);
+}
 /** Voluntary restart. Endless is one life per run, so it begins again at verse 1; crash recovery is separate (recoverFromCrash). */
 function restart() { if (G.endless) startEndless(G.endless.seed, 1, null, G.endless.mods); else startChapter(G.chapter); }
 function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; G.input.reset(); G.last = 0; }
@@ -285,11 +313,13 @@ function frameBody(t) {
     }
   }
   const simMs = performance.now() - simT0, alpha = G.mode === 'play' ? Math.min(1, G.acc / TICK) : 1, view = viewOf(G.prev, G.sim, alpha), p = G.sim.p;
+  if (G.mode === 'photo') { photoMove(elapsed); Object.assign(view, { x: G.photo.x, z: G.photo.z, y: G.photo.y, yaw: G.photo.yaw, fov: G.photo.fov, hold: 0 }); }
   G.bob += elapsed * (p.hold ? 4 : 9) * (ticks && (G.prev.p.x !== p.x || G.prev.p.z !== p.z) ? 1 : 0); view.bob = Math.sin(G.bob) * 1.6;
   const dt = G.mode === 'play' ? elapsed : 0; renderFrame(G.pl, view, dt);
   G.hurtFlash *= Math.exp(-elapsed / 0.25); const bg = [3 / 255 + G.hurtFlash * 0.25, 5 / 255, 11 / 255];
   if (G.out) G.out.draw(G.pl.sel.inst, G.pl.sel.count, G.pl.w, G.pl.h, bg);
   else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx, undefined, G.cvd); c.ctx.putImageData(c.img, 0, 0); }
+  if (G.photoShot) { G.photoShot = false; savePhoto($('view')); } // read in the same task as the draw, while the WebGL buffer is valid
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
   G.hud.update(G.sim, elapsed, S().captions);
   if (S().soundCaptions) { G.heartCue = (G.heartCue || 0) - elapsed; if (G.mode === 'play' && G.heartCue <= 0) { G.heartCue = 0.9; G.hud.sound(heartbeatCaption(G.sim)); } } G.hud.renderSounds(S().soundCaptions ? elapsed : 99); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
@@ -320,6 +350,8 @@ async function boot() {
   if (!G.out) { canvas.width = G.pl.w * 2; canvas.height = G.pl.h * 2; const ctx = canvas.getContext('2d'); G.cpu = { ctx, img: ctx.createImageData(canvas.width, canvas.height) }; }
   if (matchMedia('(pointer: coarse)').matches) $('touch').hidden = false;
   addEventListener('keydown', e => { if (e.code === 'Escape' && G.mode === 'pause') resume(); });
+  addEventListener('keydown', e => photoKey(e, true)); addEventListener('keyup', e => photoKey(e, false));
+  $('view').addEventListener('pointermove', e => { if (G.mode === 'photo' && e.buttons & 1) G.photo.yaw += e.movementX * 0.004; });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
   globalThis.__ode = { G, startChapter, startEndless, title, security: () => ({ trustedTypes: trustedTypesEnforced(), ...htmlStats }), hashState: () => hashState(G.sim), stats: () => ({ tier: G.pl.quality, auto: G.auto ? { tier: G.auto.tier, changes: G.auto.changes, lastP95: G.auto.lastP95 } : null, frames: [...G.frames], intervals: [...G.intervals], switchRates: [...G.switchRates], ms: { ...G.pl.stats.ms }, leaves: { ...G.pl.qt.stats }, glyphs: { ...G.pl.sel.stats }, out: G.out ? { ...G.out.stats, kind: G.out.kind } : { kind: 'cpu' }, tick: G.sim?.tick, mode: G.mode, chapter: G.chapter, cascade: G.pl.stats.cascade }) };
   requestAnimationFrame(frame);

@@ -96,7 +96,7 @@ try {
     report.hud.push({ viewport: `${w}x${h}`, textScale: scale, devicePixelRatio: dpr, ...r, errors: errs }); await p.close();
   }
 } finally { await browser.close(); server.kill(); }
-const PAUSE_MENU = new Set(['Resume', 'Settings', 'Restart chapter', 'Save and quit to title']);
+const PAUSE_MENU = new Set(['Resume', 'Settings', 'Photo mode', 'Restart chapter', 'Save and quit to title']);
 const uiOk = !!report.ui && report.ui.paused === 'PAUSED' && report.ui.mode === 'play' && !report.ui.errors.length
   && report.ui.audio === 'running' && report.ui.reducedMotion === true && report.ui.events.presented > 0 && report.ui.events.pending === 0 && report.ui.focusCycle.length > 0 && report.ui.focusCycle.every(t => PAUSE_MENU.has(t));
 const SEC_CARDS = ['ODE', 'HOW TO PLAY', 'SETTINGS', 'CHAPTERS', 'ENDLESS CHOIR', 'PAUSED', 'UNWRITTEN', 'YOU SING', 'VERSE 2', 'SOMETHING BROKE'];
