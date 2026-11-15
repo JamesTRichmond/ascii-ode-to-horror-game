@@ -38,7 +38,7 @@ async function loadAssets() {
 function applySettings() {
   const s = S(), root = document.documentElement; if (G.telemetry) G.telemetry.enabled = !!s.telemetry && !!G.telemetryConfig;
   root.style.setProperty('--scale', s.textScale); root.classList.toggle('contrast', !!s.contrast); root.classList.toggle('still', !!s.reducedMotion);
-  G.audio.setVolume(s.volume); if (G.input) { G.input.sensitivity = s.sensitivity; G.input.vibration = s.vibration !== false; G.input.setBindings(normalise(s.bindings)); G.input.toggle = !!s.toggleVoice; if (!s.toggleVoice) G.input.latched = 0; } $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
+  G.audio.setVolume(s.volume); G.audio.spatial = s.spatial === 'stereo' ? 'stereo' : 'binaural'; if (G.input) { G.input.sensitivity = s.sensitivity; G.input.vibration = s.vibration !== false; G.input.setBindings(normalise(s.bindings)); G.input.toggle = !!s.toggleVoice; if (!s.toggleVoice) G.input.latched = 0; } $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (s.quality === 'auto') { G.auto ||= createAutoQuality({ start: 'medium' }); } else G.auto = null;
   // render thread: the worker needs the WebGL output path and is bypassed while a G-buffer inspection view is shown
   const thread = s.renderThread === 'worker' && G.out && !s.debug ? 'worker' : 'local';
@@ -146,6 +146,7 @@ function settingsMenu(back) {
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
     <label>Captions <select data-k="captions">${opt(true, s.captions, 'on')}${opt(false, s.captions, 'off')}</select></label>
     <label>Sound captions (direction and distance) <select data-k="soundCaptions">${opt(false, !!s.soundCaptions, 'off')}${opt(true, !!s.soundCaptions, 'on')}</select></label>
+    <label>Spatial audio <select data-k="spatial">${opt('binaural', s.spatial || 'binaural', 'binaural 3D (headphones)')}${opt('stereo', s.spatial, 'stereo (speakers)')}</select></label>
     <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-k="volume"></label>
     <label>Controller vibration <select data-k="vibration">${opt(true, s.vibration !== false, 'on')}${opt(false, s.vibration !== false, 'off')}</select></label>
     <label>Game speed (assist) <select data-k="speed">${[1, 0.85, 0.7, 0.5].map(v => opt(v, s.speed ?? 1, v === 1 ? '100% (standard)' : `${v * 100}%`)).join('')}</select></label>
