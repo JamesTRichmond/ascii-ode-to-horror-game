@@ -120,14 +120,22 @@ function settingsMenu(back) {
   [{ label: 'Done', primary: true, action: back }, { label: 'Copy diagnostic report', action: copyDiagnostics }], 'ODE');
   m.onchange = e => { const k = e.target.dataset.k; if (!k) return; const v = e.target.value; S()[k] = v === 'true' ? true : v === 'false' ? false : e.target.type === 'range' || k === 'textScale' ? +v : v; applySettings(); };
 }
-async function copyDiagnostics() {
-  const text = JSON.stringify(G.telemetry?.report() ?? {}, null, 2);
-  try { await navigator.clipboard.writeText(text); G.hud.alert('DIAGNOSTIC REPORT COPIED', 2); } catch { G.hud.alert('COPY BLOCKED — SEE CONSOLE', 2); console.info(text); }
+/** Copy a report from the open dialog. Status is announced inside the dialog; if the clipboard is unavailable or
+ *  refused, the report appears in a selectable read-only field in the same dialog so the player can copy it by hand. */
+async function copyFromDialog(text, done) {
+  const card = $('menu').querySelector('.card'); if (!card) return; const nav = card.querySelector('nav');
+  let status = card.querySelector('[data-copy-status]'); if (!status) { status = document.createElement('p'); status.setAttribute('role', 'status'); status.dataset.copyStatus = ''; card.insertBefore(status, nav); }
+  try { await navigator.clipboard.writeText(text); status.textContent = done; }
+  catch {
+    let box = card.querySelector('textarea[data-report]'); if (!box) { box = document.createElement('textarea'); box.readOnly = true; box.rows = 8; box.dataset.report = ''; box.setAttribute('aria-label', 'Report text'); card.insertBefore(box, nav); }
+    box.value = text; status.textContent = 'Copying was blocked. The report is selected below: copy it with Ctrl+C (Cmd+C on a Mac).'; box.focus(); box.select();
+  }
 }
+const copyDiagnostics = () => copyFromDialog(JSON.stringify(G.telemetry?.report() ?? {}, null, 2), 'Diagnostic report copied.');
 function crashed(report) {
   if (G.mode === 'crashed') return; cancelDeferred(); G.mode = 'crashed'; G.input.enabled = false; document.exitPointerLock?.(); G.save.lastCrash = { at: report.at, message: report.message, chapter: report.chapter }; storeSave(G.save);
   G.hud.menu('SOMETHING BROKE', `<p>The game hit an error and stopped this chapter. Your saved progress is safe. Restarting rebuilds the renderer; if the error returns, reload the game.</p><p>The report below contains the chapter, seed and your inputs so the bug can be replayed exactly. It contains nothing about you.</p><p><code>${String(report.message).replace(/[<>&]/g, '')}</code></p>`,
-    [{ label: 'Copy crash report', primary: true, action: async () => { try { await navigator.clipboard.writeText(JSON.stringify(report)); G.hud.alert('CRASH REPORT COPIED', 2); } catch { console.info(JSON.stringify(report)); } } }, { label: G.endless ? 'Restart verse' : 'Restart chapter', action: recoverFromCrash }, { label: 'Reload the game', action: () => location.reload() }, { label: 'Title', action: () => { freshPipeline(); title(); } }], 'ERROR');
+    [{ label: 'Copy crash report', primary: true, action: () => copyFromDialog(JSON.stringify(report), 'Crash report copied.') }, { label: G.endless ? 'Restart verse' : 'Restart chapter', action: recoverFromCrash }, { label: 'Reload the game', action: () => location.reload() }, { label: 'Title', action: () => { freshPipeline(); title(); } }], 'ERROR');
 }
 /** Crash recovery: the same chapter, or the same Endless verse (unlike the pause menu's one-life 'Restart run'). */
 function recoverFromCrash() {
