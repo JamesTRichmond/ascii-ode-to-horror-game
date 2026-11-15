@@ -6,19 +6,33 @@ permissions:
   contents: read
 jobs:
   test:
+    # The simulation is integer-only and must hash identically on every supported runtime: the same suite (including
+    # the golden hashes in tests/determinism-golden.test.mjs and tests/regressions/) runs on each Node line.
+    name: test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Acceptance fixtures and game tests
+        run: npm test
+      - name: Production build (no pack)
+        run: node tools/build.mjs --no-pack
+  atlas:
+    name: atlas is reproducible from source
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Acceptance fixtures and game tests
-        run: npm test
-      - name: Production build (no pack)
-        run: node tools/build.mjs --no-pack
-      - name: Atlas is reproducible from source
-        run: |
-          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
-          node tools/bake-atlas.mjs
-          git diff --exit-code -- assets/atlas
+      - run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+      - run: node tools/bake-atlas.mjs
+      - run: git diff --exit-code -- assets/atlas
