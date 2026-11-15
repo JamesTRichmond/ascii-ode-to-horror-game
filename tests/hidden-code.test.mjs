@@ -24,6 +24,7 @@ test('detector: finds statements after a trailing comment, ignores prose, string
     'const r = /a\\/\\/b/g; f(r); // a regex containing slashes',
     'a(); /* block: G.bot = 1; */ b();',
     'a(); // e.g. (see the guide)',
+    'a(); // with st.toggle (assist), a press latches these on and the next press releases them',
   ];
   for (const s of good) assert.deepEqual(hiddenCode(s), [], s);
 });
