@@ -13,6 +13,7 @@ import { viewOf, snapshot } from './view.js';
 import { createInput } from './input.js';
 import { ACTIONS, normalise, rebind, describe, keyName } from './bindings.js';
 import { createHud } from './hud.js';
+import { captionFor, heartbeatCaption } from './soundcaptions.js';
 import { createAudio } from './audio.js';
 import { loadSave, storeSave, exportSave, importSave } from './save.js';
 import { TICK, MAX_CATCHUP, consumeTicks } from './loop.js';
@@ -139,6 +140,7 @@ function settingsMenu(back) {
     <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%')).join('')}</select></label>
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
     <label>Captions <select data-k="captions">${opt(true, s.captions, 'on')}${opt(false, s.captions, 'off')}</select></label>
+    <label>Sound captions (direction and distance) <select data-k="soundCaptions">${opt(false, !!s.soundCaptions, 'off')}${opt(true, !!s.soundCaptions, 'on')}</select></label>
     <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-k="volume"></label>
     <label>Controller vibration <select data-k="vibration">${opt(true, s.vibration !== false, 'on')}${opt(false, s.vibration !== false, 'off')}</select></label>
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
@@ -224,7 +226,7 @@ function completed() {
 // ---------------------------------------------------------------- event presentation
 const CY = [0.5, 1.4, 1.3], RED = [1.6, 0.25, 0.15], PALE = [1.1, 1.05, 0.95], GOLDC = [1.5, 1.1, 0.4];
 function present(e) {
-  const pl = G.pl, x = e.x * U, z = e.z * U, hud = G.hud, def = G.sim.def; G.audio.event(e); G.telemetry?.event(e, G.sim);
+  const pl = G.pl, x = e.x * U, z = e.z * U, hud = G.hud, def = G.sim.def; G.audio.event(e); G.telemetry?.event(e, G.sim); if (S().soundCaptions) hud.sound(captionFor(e, G.sim.p));
   switch (e.type) {
     case 'measure': burst(pl, x, 1.2, z, 40, 3.5, CY, 1.1); hud.alert(`A MEASURE RETURNS · ${e.a}/${def.need}`); hud.caption(STANZAS[def.id - 1].slice(2 + e.a * 2 - 2, 2 + e.a * 2 + 2).slice(0, 2)); break;
     case 'hum': burst(pl, x + Math.cos(pl.cam.yaw) * 0.8, 1.2, z + Math.sin(pl.cam.yaw) * 0.8, 5, 1.6, CY, 0.9, pl.cam.yaw); break;
@@ -280,7 +282,8 @@ function frameBody(t) {
   if (G.out) G.out.draw(G.pl.sel.inst, G.pl.sel.count, G.pl.w, G.pl.h, bg);
   else { const c = G.cpu; compositeCPU(c.img.data, G.pl.w, G.pl.h, 2, G.pl.sel.inst, G.pl.sel.count, G.atlas, G.atlasPx); c.ctx.putImageData(c.img, 0, 0); }
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
-  G.hud.update(G.sim, elapsed, S().captions); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
+  G.hud.update(G.sim, elapsed, S().captions);
+  if (S().soundCaptions) { G.heartCue = (G.heartCue || 0) - elapsed; if (G.mode === 'play' && G.heartCue <= 0) { G.heartCue = 0.9; G.hud.sound(heartbeatCaption(G.sim)); } } G.hud.renderSounds(S().soundCaptions ? elapsed : 99); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
   // rolling statistics: G.frames is CPU work time for this frame, G.intervals the time between frames
   const total = performance.now() - simT0; G.frames.push(total);
   if (G.auto && G.mode === 'play') { const t2 = sampleFrame(G.auto, G.pl.remote ? G.pl.stats.ms.total || total : total); if (t2) setTier(t2); } /* a worker's cost is its own frame time */

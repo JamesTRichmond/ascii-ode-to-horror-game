@@ -2,6 +2,7 @@
 // carried by a label and a shape as well as colour, everything is keyboard reachable, and the
 // critical meters stay visible regardless of what the renderer is doing.
 import { encodeSeed } from '../sim/seedcode.js';
+import { createCaptionStack } from './soundcaptions.js';
 import { TUNE, ET } from '../sim/sim.js';
 import { html, isSafeHTML, markup, setHTML } from './safe-html.js';
 
@@ -17,6 +18,11 @@ export function createHud() {
   hud.setChapter = (def, total, endless = null) => { $('chapterKicker').textContent = endless ? `ENDLESS CHOIR · ${encodeSeed(endless.seed)} · VERSE ${endless.depth}` : `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
   hud.caption = (lines, seconds = 3.2) => { for (const l of [].concat(lines)) hud.captionQueue.push([l, seconds]); };
   hud.pain = () => { hud.hurt = 0.8; };
+  // directional sound captions: a polite live region, re-rendered only when its text changes
+  const sc = document.createElement('div'); sc.id = 'soundcap'; sc.setAttribute('aria-live', 'polite'); sc.setAttribute('aria-label', 'Sound captions'); $('hud')?.querySelector('.hud-top')?.after(sc); // in flow under the top panels: never on top of them
+  hud.sounds = createCaptionStack(); let scText = '';
+  hud.sound = c => hud.sounds.push(c);
+  hud.renderSounds = dt => { hud.sounds.tick(dt); const t = hud.sounds.lines().join('\n'); if (t !== scText) { scText = t; sc.textContent = t; } };
   hud.alert = (text, seconds = 2.4) => { $('alert').textContent = text; hud.alertTimer = seconds; };
 
   hud.update = (sim, dt, captions = true) => {
