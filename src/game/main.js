@@ -36,7 +36,7 @@ function applySettings() {
   G.audio.setVolume(s.volume); if (G.input) G.input.sensitivity = s.sensitivity; $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (s.quality === 'auto') { G.auto ||= createAutoQuality({ start: 'medium' }); } else G.auto = null;
   setTier(G.auto ? G.auto.tier : s.quality);
-  G.pl.opts.reducedMotion = !!s.reducedMotion; G.hud.still = !!s.reducedMotion; storeSave(G.save);
+  G.pl.opts.reducedMotion = !!s.reducedMotion; G.pl.opts.autoExposure = s.eyeAdaptation !== false; G.hud.still = !!s.reducedMotion; storeSave(G.save);
 }
 function setTier(tier) {
   if (G.pl && G.pl.quality === tier) return;
@@ -109,6 +109,7 @@ function settingsMenu(back) {
   const s = S(), opt = (v, cur, t) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${t}</option>`;
   const m = G.hud.menu('SETTINGS', `
     <label>Render quality <select data-k="quality">${opt('auto', s.quality, 'auto (adapts to this machine)')}${Object.keys(QUALITY).map(q => opt(q, s.quality, `${q} (${QUALITY[q][0]}×${QUALITY[q][1]})`)).join('')}</select></label>
+    <label>Eye adaptation <select data-k="eyeAdaptation">${opt(true, s.eyeAdaptation !== false, 'on')}${opt(false, s.eyeAdaptation !== false, 'off')}</select></label>
     <label>Reduced motion <select data-k="reducedMotion">${opt(false, s.reducedMotion, 'off')}${opt(true, s.reducedMotion, 'on')}</select></label>
     <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%')).join('')}</select></label>
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
@@ -221,7 +222,7 @@ function frameBody(t) {
   if (G.auto && G.mode === 'play') { const t2 = sampleFrame(G.auto, total); if (t2) setTier(t2); } if (G.frames.length > 240) G.frames.shift(); G.switchRates.push(G.pl.sel.stats.switchRate); if (G.switchRates.length > 240) G.switchRates.shift();
   if (S().stats && (t | 0) % 6 === 0) { const f = [...G.frames].sort((a, b) => a - b), sw = [...G.switchRates].sort((a, b) => a - b), ms = G.pl.stats.ms, q = (a, p) => a[Math.min(a.length - 1, Math.floor(a.length * p))] || 0;
     const iv = [...G.intervals].sort((a, b) => a - b);
-    $('stats').textContent = `cpu p50 ${q(f, 0.5).toFixed(1)} p95 ${q(f, 0.95).toFixed(1)} ms\ninterval p50 ${q(iv, 0.5).toFixed(1)} p95 ${q(iv, 0.95).toFixed(1)} ms\nsim ${simMs.toFixed(2)} ms x${ticks}\ngbuf ${ms.gbuffer.toFixed(1)} light ${ms.light.toFixed(1)} fog ${ms.fog.toFixed(1)}\ntree ${ms.tree.toFixed(1)} flow ${ms.flow.toFixed(1)} sel ${ms.select.toFixed(1)}\nleaves ${G.pl.qt.stats.leaves} [${G.pl.qt.stats.byLevel}] ovf ${G.pl.qt.stats.overflow}\nglyphs ${G.pl.sel.count} tris ${G.pl.stats.tris} tier ${G.pl.quality}${G.auto ? ' (auto)' : ''}\nswitch p95 ${(q(sw, 0.95) * 100).toFixed(1)}%\n${G.out ? `gpu upload ${G.out.stats.uploadMs.toFixed(2)} draw ${G.out.stats.drawMs.toFixed(2)}` : 'cpu compositor'}\ntick ${G.sim.tick} hash ${hashState(G.sim).toString(16)}`; }
+    $('stats').textContent = `cpu p50 ${q(f, 0.5).toFixed(1)} p95 ${q(f, 0.95).toFixed(1)} ms\ninterval p50 ${q(iv, 0.5).toFixed(1)} p95 ${q(iv, 0.95).toFixed(1)} ms\nsim ${simMs.toFixed(2)} ms x${ticks}\ngbuf ${ms.gbuffer.toFixed(1)} light ${ms.light.toFixed(1)} fog ${ms.fog.toFixed(1)}\ntree ${ms.tree.toFixed(1)} flow ${ms.flow.toFixed(1)} sel ${ms.select.toFixed(1)}\nleaves ${G.pl.qt.stats.leaves} [${G.pl.qt.stats.byLevel}] ovf ${G.pl.qt.stats.overflow}\nglyphs ${G.pl.sel.count} tris ${G.pl.stats.tris} tier ${G.pl.quality} exposure ${(G.pl.stats.exposure ?? 1).toFixed(2)}${G.auto ? ' (auto)' : ''}\nswitch p95 ${(q(sw, 0.95) * 100).toFixed(1)}%\n${G.out ? `gpu upload ${G.out.stats.uploadMs.toFixed(2)} draw ${G.out.stats.drawMs.toFixed(2)}` : 'cpu compositor'}\ntick ${G.sim.tick} hash ${hashState(G.sim).toString(16)}`; }
 }
 
 async function boot() {
