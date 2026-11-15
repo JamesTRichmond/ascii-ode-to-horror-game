@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 // Deterministic replay of a crash report or a regression fixture.
 // Usage: node tools/replay.mjs <report.json> [--until tick] [--trace]
-// Input: { chapter (1-9, or 0 with endless), endless: {seed, depth} | null, seed, inputs (RLE), inputsFrom, tick?, hash? }
-// Reconstructs the chapter, replays every input tick-by-tick, and checks the final tick/hash when the
+// Input: { chapter (1-9, or 0 with endless), endless: {seed, depth} | null, seed, base: {tick, state} | null, inputs (RLE), inputsFrom, tick?, hash? }
+// Reconstructs the chapter (from the serialized base state when the log starts mid-run), replays every input tick-by-tick, and checks the final tick/hash when the
 // report carries them. Exit code 0 = reproduced (or replayed cleanly), 1 = divergence, 2 = bad input.
 import fs from 'node:fs';
-import { createSim, step, hashState } from '../src/sim/sim.js';
+import { createSim, step, hashState, deserialize } from '../src/sim/sim.js';
 import { endlessVerse } from '../src/sim/endless.js';
 import { decodeInputs } from '../src/game/telemetry.js';
 
 export function replayReport(r, opts = {}) {
-  if (r.inputsFrom) throw new Error(`report starts at tick ${r.inputsFrom}; the log was truncated and cannot be replayed from the chapter start`);
   const def = r.endless ? endlessVerse(r.endless.seed, r.endless.depth) : r.chapter - 1;
-  const sim = createSim(def, r.seed), inputs = decodeInputs(r.inputs || []), until = opts.until ?? inputs.length, events = [];
+  let sim;
+  if (r.base?.state) { // the log starts at base.tick: a restored checkpoint, or a re-based long session
+    sim = deserialize(Int32Array.from(r.base.state), r.endless ? def : null);
+    if (r.base.tick != null && sim.tick !== r.base.tick) throw new Error(`base state is at tick ${sim.tick}, report says ${r.base.tick}`);
+  } else {
+    if (r.inputsFrom) throw new Error(`report starts at tick ${r.inputsFrom} with no base state; the log was truncated and cannot be replayed from the chapter start`);
+    sim = createSim(def, r.seed);
+  }
+  const inputs = decodeInputs(r.inputs || []), until = opts.until ?? inputs.length, events = [];
   for (let i = 0; i < Math.min(until, inputs.length); i++) { step(sim, inputs[i]); if (opts.trace) for (const e of sim.events) events.push({ tick: sim.tick, type: e.type, a: e.a }); sim.events.length = 0; }
   return { sim, tick: sim.tick, hash: hashState(sim) >>> 0, done: sim.c.done, dead: sim.c.dead, events };
 }

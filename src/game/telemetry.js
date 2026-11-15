@@ -7,7 +7,8 @@
 // Crash reports carry the deterministic replay context (chapter, seed, input log), so any crash can be
 // reproduced exactly with tools/replay.mjs.
 export const TELEMETRY_SCHEMA = 1;
-const RING = 200, INPUT_CAP = 36000; // ten minutes of 60 Hz input words
+const RING = 200;
+export const INPUT_CAP = 36000; // ten minutes of 60 Hz input words; the shell re-bases its log before it grows past this
 
 export function createTelemetry({ version, getState, enabled = false, endpoint = null, send = null }) {
   const T = { version, enabled, endpoint, events: [], crashes: [], session: Math.random().toString(36).slice(2, 10), sent: 0, dropped: 0 };
@@ -41,7 +42,9 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
       message: String(error?.message || error).slice(0, 500),
       stack: String(error?.stack || '').split('\n').slice(0, 12).map(l => l.replace(/https?:\/\/[^/\s)]+/g, '')).join('\n'),
       chapter: st.chapter ?? null, endless: st.endless ?? null, seed: st.seed ?? null, tick: st.tick ?? null, hash: st.hash ?? null,
-      inputsFrom: st.log ? Math.max(0, st.log.length - INPUT_CAP) : 0, inputs: st.log ? encodeInputs(st.log.slice(-INPUT_CAP)) : [],
+      // replay baseline: base = { tick, state } (serialized sim) when the log does not start at tick 0 (a restored
+      // checkpoint, or a session longer than INPUT_CAP ticks); null means the log starts at the chapter's first tick
+      base: st.base ?? null, inputsFrom: st.log ? Math.max(0, st.log.length - INPUT_CAP) : 0, inputs: st.log ? encodeInputs(st.log.slice(-INPUT_CAP)) : [],
       tier: st.tier ?? null, userAgentFamily: uaFamily(globalThis.navigator?.userAgent),
     };
     push(T.crashes, report, 5); emit('crash', { message: report.message, chapter: report.chapter, tick: report.tick });

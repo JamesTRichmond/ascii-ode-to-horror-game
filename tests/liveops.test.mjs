@@ -66,3 +66,17 @@ test('endless verses never produce campaign death or chapter_complete events', (
   T.event({ type: 'death' }, sim); T.event({ type: 'complete' }, sim); assert.equal(T.events.length, 0);
   T.event({ type: 'death' }, createSim(0, 1)); assert.equal(T.events.at(-1).type, 'death');
 });
+
+test('crash report from a restored or re-based run carries its base state and replays from it exactly', () => {
+  for (const [def, endless] of [[3, null], [endlessVerse(7, 2), { seed: 7, depth: 2 }]]) {
+    const sim = createSim(def, 104), bot = createBot();
+    for (let i = 0; i < 400; i++) { step(sim, botInput(bot, sim)); sim.events.length = 0; }
+    const base = { tick: sim.tick, state: Array.from(serialize(sim)) }, log = []; // what the shell records at restore / re-base
+    for (let i = 0; i < 500 && !sim.c.done && !sim.c.dead; i++) { const w = botInput(bot, sim); log.push(w); step(sim, w); sim.events.length = 0; }
+    const T = createTelemetry({ version: 't', getState: () => ({ chapter: endless ? 0 : 4, endless, seed: 104, tick: sim.tick, hash: hashState(sim) >>> 0, log, base }) });
+    const r = JSON.parse(JSON.stringify(T.crash(new Error('late'))));
+    assert.equal(r.inputsFrom, 0); assert.equal(r.base.tick, 400);
+    const out = replayReport(r); assert.equal(out.tick, r.tick); assert.equal(out.hash, r.hash, endless ? 'endless' : 'campaign');
+    assert.throws(() => replayReport({ ...r, base: null, inputsFrom: 400 }), /no base state/, 'a truncated log without a base is rejected');
+  }
+});
