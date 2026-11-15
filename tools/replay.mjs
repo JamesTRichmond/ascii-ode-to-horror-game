@@ -21,13 +21,17 @@ export function replayReport(r, opts = {}) {
   }
   const inputs = decodeInputs(r.inputs || []), until = opts.until ?? inputs.length, events = [];
   for (let i = 0; i < Math.min(until, inputs.length); i++) { step(sim, inputs[i]); if (opts.trace) for (const e of sim.events) events.push({ tick: sim.tick, type: e.type, a: e.a }); sim.events.length = 0; }
-  return { sim, tick: sim.tick, hash: hashState(sim) >>> 0, done: sim.c.done, dead: sim.c.dead, events };
+  const out = { sim, tick: sim.tick, hash: hashState(sim) >>> 0, done: sim.c.done, dead: sim.c.dead, events };
+  // a report from a throwing step: after the completed ticks, apply the failing word once to reproduce the exception
+  // (null = it no longer throws). Measured values above are taken first, at the replay boundary.
+  if (r.failingInput != null && opts.until == null) { try { step(sim, r.failingInput); out.threw = null; } catch (e) { out.threw = String(e?.message || e); } }
+  return out;
 }
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const file = process.argv[2]; if (!file) { console.error('usage: node tools/replay.mjs <report.json> [--until tick] [--trace]'); process.exit(2); }
   let r; try { r = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error('cannot read report:', e.message); process.exit(2); }
   const i = process.argv.indexOf('--until'), out = replayReport(r, { until: i > 0 ? +process.argv[i + 1] : undefined, trace: process.argv.includes('--trace') });
-  console.log(JSON.stringify({ chapter: r.chapter, endless: r.endless, seed: r.seed, replayedTicks: out.tick, hash: out.hash.toString(16), done: out.done, dead: out.dead }));
+  console.log(JSON.stringify({ chapter: r.chapter, endless: r.endless, seed: r.seed, replayedTicks: out.tick, hash: out.hash.toString(16), done: out.done, dead: out.dead, ...('threw' in out ? { failingInputThrew: out.threw } : {}) }));
   if (out.events.length) for (const e of out.events) console.log(e.tick, e.type, e.a);
   const expectHash = r.hash ?? r.expect?.hash, expectTick = r.tick ?? r.expect?.tick;
   if (expectHash != null && (out.hash !== (typeof expectHash === 'string' ? parseInt(expectHash, 16) : expectHash) >>> 0 || (expectTick != null && out.tick !== expectTick))) { console.error(`DIVERGED: expected tick ${expectTick} hash ${Number(expectHash).toString(16)}`); process.exit(1); }

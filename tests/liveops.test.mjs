@@ -80,3 +80,13 @@ test('crash report from a restored or re-based run carries its base state and re
     assert.throws(() => replayReport({ ...r, base: null, inputsFrom: 400 }), /no base state/, 'a truncated log without a base is rejected');
   }
 });
+
+test('a report from a throwing step: the log holds completed ticks only, tick is the boundary, the failing word is retried', () => {
+  const sim = createSim(1, 101), bot = createBot(), log = [];
+  for (let i = 0; i < 300; i++) { const w = botInput(bot, sim); log.push(w); step(sim, w); sim.events.length = 0; }
+  const failing = botInput(bot, sim); // the shell sets failingInput before step() and clears it only after step() returns
+  const T = createTelemetry({ version: 't', getState: () => ({ chapter: 2, endless: null, seed: 101, tick: sim.tick, hash: null, failingInput: failing, log }) });
+  const r = JSON.parse(JSON.stringify(T.crash(new Error('step threw'))));
+  assert.equal(r.tick, 300); assert.equal(r.hash, null); assert.equal(r.failingInput, failing); assert.equal(decodeInputs(r.inputs).length, 300);
+  const out = replayReport(r); assert.equal(out.tick, 300, 'replay stops at the last completed tick'); assert.equal(out.threw, null, 'here the word steps cleanly: the bug is fixed');
+});

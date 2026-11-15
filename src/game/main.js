@@ -61,7 +61,7 @@ function startChapter(index, restored = null, isRestore = !!restored) {
   cancelDeferred();
   if (index >= 0) G.endless = null;
   G.chapter = index; G.runSeed = index >= 0 ? G.seed + index : G.endless.seed + G.endless.depth; G.sim = restored || createSim(index, G.runSeed); G.prev = snapshot(G.sim); G.acc = 0; G.log = [];
-  G.base = isRestore ? { tick: G.sim.tick, state: Array.from(serialize(G.sim)) } : null; // a restored run replays from its own state, not tick 0 G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
+  G.failingInput = null; G.base = isRestore ? { tick: G.sim.tick, state: Array.from(serialize(G.sim)) } : null; // a restored run replays from its own state, not tick 0 G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
   setScene(G.pl, G.sim); G.hud.setChapter(G.sim.def, CHAPTERS.length, G.endless); G.hud.closeMenu(); G.hud.show(true); G.mode = 'play'; G.input.enabled = true; G.input.reset();
   if (!isRestore) G.hud.caption(STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
   if (index >= 0 && !isRestore) G.telemetry?.track('chapter_start', { chapter: index + 1 });
@@ -205,7 +205,7 @@ function frameBody(t) {
     for (let k = 0; k < ticks; k++) {
       G.prev = snapshot(G.sim); const word = G.bot ? botInput(G.bot, G.sim) : G.input.poll();
       if (G.log.length >= INPUT_CAP) { G.base = { tick: G.sim.tick, state: Array.from(serialize(G.sim)) }; G.log = []; } // re-base instead of truncating
-      G.log.push(word); step(G.sim, word); for (const e of G.sim.events) present(e); G.sim.events.length = 0;
+      G.failingInput = word; step(G.sim, word); G.failingInput = null; G.log.push(word); // the log holds completed ticks only for (const e of G.sim.events) present(e); G.sim.events.length = 0;
     }
   }
   const simMs = performance.now() - simT0, alpha = G.mode === 'play' ? Math.min(1, G.acc / TICK) : 1, view = viewOf(G.prev, G.sim, alpha), p = G.sim.p;
@@ -233,7 +233,7 @@ async function boot() {
     const oc = new OffscreenCanvas(G.atlasImage.width, G.atlasImage.height), o2 = oc.getContext('2d'); o2.drawImage(G.atlasImage, 0, 0); const d = o2.getImageData(0, 0, oc.width, oc.height);
     G.atlasPx = { pixels: d.data, w: oc.width, h: oc.height, channels: 4 }; if (S().quality !== 'auto') S().quality = 'low'; }
   G.telemetryConfig = await loadTelemetryConfig();
-  G.telemetry = createTelemetry({ version: VERSION, endpoint: G.telemetryConfig?.endpoint ?? null, getState: () => G.sim ? { chapter: G.chapter + 1, endless: G.endless, seed: G.runSeed, tick: G.sim.tick, hash: hashState(G.sim), log: G.log, base: G.base, tier: G.pl?.quality } : {} });
+  G.telemetry = createTelemetry({ version: VERSION, endpoint: G.telemetryConfig?.endpoint ?? null, getState: () => G.sim ? { chapter: G.chapter + 1, endless: G.endless, seed: G.runSeed, tick: G.sim.tick, hash: G.failingInput == null ? hashState(G.sim) : null, failingInput: G.failingInput, log: G.log, base: G.base, tier: G.pl?.quality } : {} });
   G.telemetry.install(report => crashed(report));
   G.input = createInput(canvas); G.input.onPause = pause; applySettings(); // applies saved consent before the first event
   G.telemetry.track('session_start', { tier: S().quality, reducedMotion: !!S().reducedMotion, textScale: S().textScale });

@@ -44,7 +44,9 @@ export function createTelemetry({ version, getState, enabled = false, endpoint =
       chapter: st.chapter ?? null, endless: st.endless ?? null, seed: st.seed ?? null, tick: st.tick ?? null, hash: st.hash ?? null,
       // replay baseline: base = { tick, state } (serialized sim) when the log does not start at tick 0 (a restored
       // checkpoint, or a session longer than INPUT_CAP ticks); null means the log starts at the chapter's first tick
-      base: st.base ?? null, inputsFrom: st.log ? Math.max(0, st.log.length - INPUT_CAP) : 0, inputs: st.log ? encodeInputs(st.log.slice(-INPUT_CAP)) : [],
+      // failingInput: the word whose step() threw, kept out of the log. tick is then the last completed tick and hash is
+      // null (the sim may be half-mutated); replay checks the tick, then applies failingInput to reproduce the exception.
+      failingInput: st.failingInput ?? null, base: st.base ?? null, inputsFrom: st.log ? Math.max(0, st.log.length - INPUT_CAP) : 0, inputs: st.log ? encodeInputs(st.log.slice(-INPUT_CAP)) : [],
       tier: st.tier ?? null, userAgentFamily: uaFamily(globalThis.navigator?.userAgent),
     };
     push(T.crashes, report, 5); emit('crash', { message: report.message, chapter: report.chapter, tick: report.tick });
