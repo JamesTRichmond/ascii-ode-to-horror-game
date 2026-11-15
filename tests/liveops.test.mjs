@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { root } from './helpers.mjs';
-import { createTelemetry, encodeInputs, decodeInputs } from '../src/game/telemetry.js';
+import { createTelemetry, encodeInputs, decodeInputs, allowedEndpoint } from '../src/game/telemetry.js';
 import { endlessVerse, weeklySeed } from '../src/sim/endless.js';
 import { createSim, step, hashState, serialize, deserialize, TICK_HZ, TILE, solidAt, flood } from '../src/sim/sim.js';
 import { createBot, botInput } from '../src/sim/bot.js';
@@ -89,4 +89,20 @@ test('a report from a throwing step: the log holds completed ticks only, tick is
   const r = JSON.parse(JSON.stringify(T.crash(new Error('step threw'))));
   assert.equal(r.tick, 300); assert.equal(r.hash, null); assert.equal(r.failingInput, failing); assert.equal(decodeInputs(r.inputs).length, 300);
   const out = replayReport(r); assert.equal(out.tick, 300, 'replay stops at the last completed tick'); assert.equal(out.threw, null, 'here the word steps cleanly: the bug is fixed');
+});
+
+test('hotfix tool writes nothing when a version site is missing', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ode-hotfix-')); fs.mkdirSync(path.join(dir, 'src/game'), { recursive: true });
+  const pkg = JSON.stringify({ name: 'x', version: '1.0.0' }); fs.writeFileSync(path.join(dir, 'package.json'), pkg); fs.writeFileSync(path.join(dir, 'src/game/main.js'), "export const VERSION = '1.0.0';\n"); fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), 'no heading\n');
+  assert.throws(() => execFileSync(process.execPath, [path.join(root, 'tools/hotfix.mjs'), 'patch', 'x'], { env: { ...process.env, HOTFIX_ROOT: dir }, stdio: 'pipe' }));
+  assert.equal(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), pkg, 'package.json untouched'); assert.match(fs.readFileSync(path.join(dir, 'src/game/main.js'), 'utf8'), /'1\.0\.0'/);
+  fs.rmSync(dir, { recursive: true });
+});
+test('telemetry endpoint: root-relative path or https URL; protocol-relative "//host" is rejected', () => {
+  assert.ok(allowedEndpoint('/api/telemetry')); assert.ok(allowedEndpoint('https://collector.example/c'));
+  for (const bad of ['//evil.example/c', '/\\evil.example', 'http://collector.example/c', 'javascript:alert(1)', 'collect']) assert.ok(!allowedEndpoint(bad), bad);
+});
+test('crash messages are stripped of URL origins like the stack', () => {
+  const T = createTelemetry({ version: 't', getState: () => ({}) }), r = T.crash(new Error('failed to load https://cdn.example.test/src/x.js'));
+  assert.ok(!r.message.includes('cdn.example.test')); assert.match(r.message, /\/src\/x\.js/);
 });
