@@ -8,7 +8,7 @@ export function createInput(canvas, opts) {
   const down = e => { if ((e.code === 'Escape' || e.code === 'KeyP') && e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); return; } /* auto-repeat of a held pause key must never resume */ if (!st.enabled) return; if (e.code === 'Escape' || e.code === 'KeyP') { st.onPause?.(); e.preventDefault(); e.stopImmediatePropagation(); return; } /* the same press must not also resume */ const b = KEYS[e.code]; if (b) { st.buttons |= b; st.taps |= b; e.preventDefault(); } };
   const up = e => { const b = KEYS[e.code]; if (b) st.buttons &= ~b; };
   addEventListener('keydown', down); addEventListener('keyup', up); addEventListener('blur', () => { st.buttons = 0; });
-  canvas.addEventListener('click', () => { if (st.enabled && !st.locked && opts?.pointerLock !== false) canvas.requestPointerLock?.(); });
+  canvas.addEventListener('click', () => { if (st.enabled && !st.locked && opts?.pointerLock !== false) canvas.requestPointerLock?.()?.catch?.(() => { /* denied or cancelled lock is ordinary play, not a crash */ }); });
   document.addEventListener('pointerlockchange', () => { st.locked = document.pointerLockElement === canvas; });
   addEventListener('mousemove', e => { if (st.locked && st.enabled) st.turn += e.movementX * 1.6 * st.sensitivity; });
   addEventListener('mousedown', e => { if (st.locked && st.enabled && e.button === 0) st.taps |= IN.CHORD; });
