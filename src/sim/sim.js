@@ -305,15 +305,23 @@ export function step(s, input) {
 }
 
 /** Canonical state: fixed field order, Int32, hashed little-endian. */
-export function serialize(s) {
+// Path fields (fieldP: distance to the player, fieldN: distance to the last noise) are derived state that entities
+// steer by. They are refreshed only on some ticks, so a restore cannot recompute them exactly; saves carry them in an
+// extension block after the hashed core. The state hash covers the core only, so it is unchanged by this block.
+const EXT_FIELDS = 0x464c4431; // 'FLD1'
+const packField = (out, f) => { for (let i = 0; i < f.length; i += 2) out.push((f[i] & 0xffff) | ((i + 1 < f.length ? f[i + 1] : 0) << 16)); };
+const unpackField = (ints, o, f) => { for (let i = 0; i < f.length; i += 2, o++) { f[i] = ints[o] & 0xffff; if (i + 1 < f.length) f[i + 1] = ints[o] >>> 16; } return o; };
+/** Canonical state. `withFields` appends the path-field extension (saves, replay baselines); hashes omit it. */
+export function serialize(s, withFields = true) {
   const out = [SCHEMA, s.def.id, s.tick, s.rng | 0, s.w, s.h];
   for (const f of P_FIELDS) out.push(s.p[f]); for (const f of C_FIELDS) out.push(s.c[f]);
   out.push(s.picks.length); for (const m of s.picks) out.push(m.taken);
   out.push(s.ents.length); for (const e of s.ents) for (const f of E_FIELDS) out.push(e[f]);
   for (let i = 0; i < s.dyn.length; i++) out.push(s.dyn[i]);
+  if (withFields) { out.push(EXT_FIELDS, s.fieldP.length); packField(out, s.fieldP); packField(out, s.fieldN); }
   return Int32Array.from(out);
 }
-export const hashState = s => fnv1a(serialize(s));
+export const hashState = s => fnv1a(serialize(s, false));
 
 /** Restore a state produced by serialize(). The next random draw is preserved. Pass `def` for non-campaign maps. */
 export function deserialize(ints, def = null) {
@@ -325,6 +333,7 @@ export function deserialize(ints, def = null) {
   const ne = ints[o++]; s.ents = [];
   for (let i = 0; i < ne; i++) { const e = {}; for (const f of E_FIELDS) e[f] = ints[o++]; s.ents.push(e); }
   for (let i = 0; i < s.dyn.length; i++) s.dyn[i] = ints[o++];
-  flood(s, s.fieldP, s.p.x >> 10, s.p.z >> 10); if (s.c.noiseAge < 600) flood(s, s.fieldN, s.c.noiseX >> 10, s.c.noiseZ >> 10);
+  if (ints[o] === EXT_FIELDS && ints[o + 1] === s.fieldP.length) { o = unpackField(ints, o + 2, s.fieldP); unpackField(ints, o, s.fieldN); } // exact
+  else { flood(s, s.fieldP, s.p.x >> 10, s.p.z >> 10); if (s.c.noiseAge < 600) flood(s, s.fieldN, s.c.noiseX >> 10, s.c.noiseZ >> 10); } // older saves: best effort
   return s;
 }
