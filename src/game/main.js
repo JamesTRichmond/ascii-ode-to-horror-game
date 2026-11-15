@@ -61,7 +61,8 @@ function startChapter(index, restored = null, isRestore = !!restored) {
   cancelDeferred();
   if (index >= 0) G.endless = null;
   G.chapter = index; G.runSeed = index >= 0 ? G.seed + index : G.endless.seed + G.endless.depth; G.sim = restored || createSim(index, G.runSeed); G.prev = snapshot(G.sim); G.acc = 0; G.log = [];
-  G.failingInput = null; G.base = isRestore ? { tick: G.sim.tick, state: Array.from(serialize(G.sim)) } : null; // a restored run replays from its own state, not tick 0 G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
+  G.failingInput = null; G.base = isRestore ? { tick: G.sim.tick, state: Array.from(serialize(G.sim)) } : null; /* a restored run replays from its own state, not tick 0 */
+  G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
   setScene(G.pl, G.sim); G.hud.setChapter(G.sim.def, CHAPTERS.length, G.endless); G.hud.closeMenu(); G.hud.show(true); G.mode = 'play'; G.input.enabled = true; G.input.reset();
   if (!isRestore) G.hud.caption(STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
   if (index >= 0 && !isRestore) G.telemetry?.track('chapter_start', { chapter: index + 1 });
@@ -171,7 +172,8 @@ function recoverFromCrash() {
   freshPipeline(); G.mode = 'play'; if (G.endless) startEndless(G.endless.seed, G.endless.depth); else startChapter(G.chapter);
 }
 function died() {
-  if (G.endless) { const d = G.endless.depth - 1; G.save.endlessBest = Math.max(G.save.endlessBest || 0, d); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); // a campaign save survives an Endless run G.telemetry?.track('endless_end', { depth: d }); G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.();
+  if (G.endless) { const d = G.endless.depth - 1; G.save.endlessBest = Math.max(G.save.endlessBest || 0, d); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); /* a campaign save survives an Endless run */
+    G.telemetry?.track('endless_end', { depth: d }); G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.();
     G.hud.menu('UNWRITTEN', `<p>The choir goes on without you. Verses completed: ${d}. Seed ${G.endless.seed}.</p>`, [{ label: 'Begin again', primary: true, action: () => startEndless(G.endless.seed, 1) }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
   G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.(); G.hud.menu('UNWRITTEN', '<p>The page forgets you. The stanza begins again.</p>', [{ label: 'Begin the chapter again', primary: true, action: () => startChapter(G.chapter) }, { label: 'Title', action: title }], `CHAPTER ${G.sim.def.id}`); }
 function completed() {
@@ -233,7 +235,8 @@ function frameBody(t) {
     for (let k = 0; k < ticks; k++) {
       G.prev = snapshot(G.sim); const word = G.bot ? botInput(G.bot, G.sim) : G.input.poll();
       if (G.log.length >= INPUT_CAP) { G.base = { tick: G.sim.tick, state: Array.from(serialize(G.sim)) }; G.log = []; } // re-base instead of truncating
-      G.failingInput = word; step(G.sim, word); G.failingInput = null; G.log.push(word); // the log holds completed ticks only for (const e of G.sim.events) present(e); G.sim.events.length = 0;
+      G.failingInput = word; step(G.sim, word); G.failingInput = null; G.log.push(word); /* the log holds completed ticks only */
+      for (const e of G.sim.events) present(e); G.sim.events.length = 0;
     }
   }
   const simMs = performance.now() - simT0, alpha = G.mode === 'play' ? Math.min(1, G.acc / TICK) : 1, view = viewOf(G.prev, G.sim, alpha), p = G.sim.p;
