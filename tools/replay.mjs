@@ -40,7 +40,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   let out; try { out = replayReport(r, { until, trace: process.argv.includes('--trace') }); } catch (e) { console.error('cannot replay report:', e?.message || e); process.exit(2); } // bad input, not divergence
   console.log(JSON.stringify({ chapter: r.chapter, endless: r.endless, seed: r.seed, replayedTicks: out.tick, hash: out.hash.toString(16), done: out.done, dead: out.dead, ...('threw' in out ? { failingInputThrew: out.threw } : {}) }));
   if (out.events.length) for (const e of out.events) console.log(e.tick, e.type, e.a);
-  const expectHash = r.hash ?? r.expect?.hash, expectTick = r.tick ?? r.expect?.tick;
+  const expectHash = r.expect?.hash ?? r.hash, expectTick = r.expect?.tick ?? r.tick; // a fixture's expect block (the fixed run) wins over the crash's own tick/hash
   if (expectHash != null && (out.hash !== (typeof expectHash === 'string' ? parseInt(expectHash, 16) : expectHash) >>> 0 || (expectTick != null && out.tick !== expectTick))) { console.error(`DIVERGED: expected tick ${expectTick} hash ${Number(expectHash).toString(16)}`); process.exit(1); }
   console.log(expectHash != null ? 'REPRODUCED' : 'REPLAYED');
 }
