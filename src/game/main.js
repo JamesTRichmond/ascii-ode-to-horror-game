@@ -76,7 +76,9 @@ function title() {
     { label: 'Continue', primary: !!cp, disabled: !cp, action: () => { try { startChapter(cp.chapter, deserialize(Int32Array.from(cp.state))); } catch { startChapter(cp.chapter); } } },
     { label: 'Chapters', disabled: G.save.unlocked < 2, action: chapterMenu }, { label: 'How to play', action: helpMenu }, { label: 'Settings', action: () => settingsMenu(title) },
   ], `v${VERSION}`);
-  checkForUpdate().then(newer => { if (newer && G.mode === 'title') { const n = document.createElement('p'); n.setAttribute('role', 'status'); n.textContent = `Version ${newer} is available. Reload the page to update; your progress is kept.`; document.querySelector('#menu .card')?.insertBefore(n, document.querySelector('#menu nav')); } });
+  // bound to this title card: hud.menu() replaces the card, so a reply after Chapters/Settings/How to play (or a newer title) is dropped
+  const card = document.querySelector('#menu .card');
+  checkForUpdate().then(newer => { if (!newer || !card?.isConnected || card.querySelector('[data-update]')) return; const n = document.createElement('p'); n.setAttribute('role', 'status'); n.dataset.update = ''; n.textContent = `Version ${newer} is available. Reload the page to update; your progress is kept.`; card.insertBefore(n, card.querySelector('nav')); });
 }
 function chapterMenu() { G.hud.menu('CHAPTERS', '', CHAPTERS.map((c, i) => ({ label: `${c.id}. ${c.title}`, disabled: i >= G.save.unlocked, action: () => startChapter(i) })).concat({ label: 'Back', action: title }), 'SELECT A STANZA'); }
 function helpMenu() {
