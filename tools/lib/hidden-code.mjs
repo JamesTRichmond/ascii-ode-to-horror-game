@@ -2,7 +2,7 @@
 // This has broken the shipped game more than once (events, autoplay, Endless death), so the test suite gates on it.
 // Only comments that follow code on the same line are checked; whole-line comments and /* */ blocks are prose.
 const CODE = [
-  /[\w$\])]\??\.[\w$]+\s*(\?\.)?\s*(\((?!\s*\))|=(?![=>]))/, /* member call or member assignment: G.bot = …, f.g(x) */
+  /[\w$\])]\??\.[\w$]+(\?\.)?(\((?!\s*\))|\s*=(?![=>]))/, /* member call or member assignment: G.bot = …, f.g(x); prose 'f.g (x)' has a space */
   /\)\s*;/, /* a finished call statement: …); */
   /\b(const|let|var)\s+[\w$]+\s*=/, /* a declaration */
   /;\s*(if|for|while|return|await|const|let)\b/, /* a statement after a semicolon */
