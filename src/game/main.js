@@ -25,6 +25,7 @@ import { createTelemetry, loadTelemetryConfig, INPUT_CAP } from './telemetry.js'
 import { endlessVerse, weeklySeed, MOD_INFO, modNames } from '../sim/endless.js';
 import { html, setHTML, htmlStats, trustedTypesEnforced } from './safe-html.js';
 import { encodeSeed, decodeSeed } from '../sim/seedcode.js';
+import { epilogueDef, EPILOGUE, EPILOGUE_TITLE, EPILOGUE_OPENING, EPILOGUE_CLOSING } from '../sim/epilogue.js';
 
 export const VERSION = '1.1.0-rc.1';
 const U = CELL / 1024, $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
@@ -67,7 +68,7 @@ function resize() { const c = $('view'), dpr = Math.min(2, devicePixelRatio || 1
 function defer(fn, ms) { clearTimeout(G.pending); const sim = G.sim; G.pending = setTimeout(() => { G.pending = 0; if (G.sim === sim && (G.mode === 'play' || G.mode === 'pause')) fn(); }, ms); }
 function cancelDeferred() { clearTimeout(G.pending); G.pending = 0; }
 function startEndless(seed, depth, restored = null, mods = 0) {
-  G.endless = { seed, depth, mods }; startChapter(-1, restored || createSim(endlessVerse(seed, depth, mods), seed + depth), !!restored);
+  G.epilogue = false; G.endless = { seed, depth, mods }; startChapter(-1, restored || createSim(endlessVerse(seed, depth, mods), seed + depth), !!restored);
   if (!restored) G.telemetry?.track('endless_verse', { seed, depth, mods });
 }
 /** Endless challenge modifiers: chosen once, kept in the save, applied to new runs (and recorded with every run). */
@@ -75,14 +76,16 @@ function modifiersMenu() {
   const cur = G.save.endlessMods || 0, m = G.hud.menu('CHALLENGE MODIFIERS', html`<p>Each modifier changes every verse of a run. Best depths are kept per combination.</p>${MOD_INFO.map(([bit, name, text]) => html`<label><input type="checkbox" data-mod="${bit}" ${cur & bit ? html`checked` : ''}> ${name} — ${text}</label>`)}`,
     [{ label: 'Done', primary: true, action: () => { G.save.endlessMods = [...m.querySelectorAll('[data-mod]')].reduce((a, c) => a | (c.checked ? +c.dataset.mod : 0), 0); storeSave(G.save); endlessMenu(); } }], 'ENDLESS CHOIR');
 }
+/** The epilogue: a stanza-less tenth chapter after the silent ending (see sim/epilogue.js). */
+function startEpilogue(restored = null) { G.epilogue = true; G.endless = null; startChapter(-1, restored || createSim(epilogueDef(), EPILOGUE.simSeed), !!restored); }
 function startChapter(index, restored = null, isRestore = !!restored) {
   cancelDeferred();
-  if (index >= 0) G.endless = null;
-  G.chapter = index; G.runSeed = index >= 0 ? G.seed + index : G.endless.seed + G.endless.depth; G.sim = restored || createSim(index, G.runSeed); G.prev = snapshot(G.sim); G.acc = 0; G.log = [];
+  if (index >= 0) { G.endless = null; G.epilogue = false; }
+  G.chapter = index; G.runSeed = index >= 0 ? G.seed + index : G.epilogue ? EPILOGUE.simSeed : G.endless.seed + G.endless.depth; G.sim = restored || createSim(index, G.runSeed); G.prev = snapshot(G.sim); G.acc = 0; G.log = [];
   G.failingInput = null; G.base = isRestore ? { tick: G.sim.tick, state: Array.from(serialize(G.sim)) } : null; /* a restored run replays from its own state, not tick 0 */
   G.bot = params.get('autoplay') ? createBot({ ending: +(params.get('ending') || 2) }) : null;
   setScene(G.pl, G.sim); G.hud.setChapter(G.sim.def, CHAPTERS.length, G.endless); G.hud.closeMenu(); G.hud.show(true); G.mode = 'play'; G.input.enabled = true; G.input.reset();
-  if (!isRestore) G.hud.caption(STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
+  if (!isRestore) G.hud.caption(G.epilogue ? EPILOGUE_OPENING : STANZAS[G.sim.def.id - 1].slice(0, 4), 2.8);
   // ghost of the best run: only for a fresh campaign attempt with the same seed as the recorded run
   G.ghost = index >= 0 && !isRestore && S().ghost !== false ? startGhost(G.save.ghosts?.[G.sim.def.id], index, G.runSeed) : null;
   if (G.ghost) G.hud.alert(`YOUR BEST SELF WALKS WITH YOU · ${(G.ghost.best / TICK_HZ).toFixed(1)}s`, 2.6);
@@ -92,7 +95,7 @@ function startChapter(index, restored = null, isRestore = !!restored) {
 }
 function pause() {
   if (G.mode !== 'play') return; G.mode = 'pause'; G.input.enabled = false; document.exitPointerLock?.();
-  G.hud.menu('PAUSED', html`<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Photo mode', action: enterPhoto }, { label: G.endless ? 'Restart run' : 'Restart chapter', action: restart }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, endless: G.endless, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
+  G.hud.menu('PAUSED', html`<p>${G.sim.def.title} — ${G.sim.def.hint}</p>`, [{ label: 'Resume', primary: true, action: resume }, { label: 'Settings', action: () => settingsMenu(pause0) }, { label: 'Photo mode', action: enterPhoto }, { label: G.endless ? 'Restart run' : 'Restart chapter', action: restart }, { label: 'Save and quit to title', action: () => { if (!G.sim.c.dead && !G.sim.c.done) { G.save.checkpoint = { chapter: G.chapter, endless: G.endless, epilogue: G.epilogue || undefined, state: Array.from(serialize(G.sim)) }; storeSave(G.save); } title(); } }], 'ODE');
 }
 const pause0 = () => { G.mode = 'play'; pause(); };
 // ---------------------------------------------------------------- photo mode: the moment is frozen, the camera is free
@@ -124,7 +127,7 @@ function savePhoto(canvas) {
   G.hud.alert?.('CAPTURED', 1);
 }
 /** Voluntary restart. Endless is one life per run, so it begins again at verse 1; crash recovery is separate (recoverFromCrash). */
-function restart() { if (G.endless) startEndless(G.endless.seed, 1, null, G.endless.mods); else startChapter(G.chapter); }
+function restart() { if (G.epilogue) { startEpilogue(); return; } if (G.endless) startEndless(G.endless.seed, 1, null, G.endless.mods); else startChapter(G.chapter); }
 function resume() { G.hud.closeMenu(); G.mode = 'play'; G.input.enabled = true; G.input.reset(); G.last = 0; }
 /** Day-one patch readiness: compare the running build with the deployed version.json (same origin, no tracking). */
 async function checkForUpdate() {
@@ -140,8 +143,8 @@ function title() {
   cancelDeferred(); G.mode = 'title'; G.input.enabled = false; G.hud.show(false); G.audio.silence?.(); const cp = G.save.checkpoint;
   G.hud.menu('ODE', html`<p class="stanza">We are the music makers,\nAnd we are the dreamers of dreams…</p><p>A horror in nine stanzas, after Arthur O'Shaughnessy. Rendered entirely in glyphs.</p>`, [
     { label: 'Begin', primary: !cp, action: () => startChapter(0) },
-    { label: 'Continue', primary: !!cp, disabled: !cp, action: () => { try { if (cp.endless) startEndless(cp.endless.seed, cp.endless.depth, deserialize(Int32Array.from(cp.state), endlessVerse(cp.endless.seed, cp.endless.depth, cp.endless.mods || 0)), cp.endless.mods || 0); else startChapter(cp.chapter, deserialize(Int32Array.from(cp.state))); } catch { if (cp.endless) startEndless(cp.endless.seed, cp.endless.depth, null, cp.endless.mods || 0); else startChapter(cp.chapter); } } },
-    { label: 'Chapters', disabled: G.save.unlocked < 2, action: chapterMenu }, { label: 'Endless Choir', disabled: !endlessUnlocked(), action: endlessMenu }, { label: 'How to play', action: helpMenu }, { label: 'Settings', action: () => settingsMenu(title) },
+    { label: 'Continue', primary: !!cp, disabled: !cp, action: () => { try { if (cp.epilogue) startEpilogue(deserialize(Int32Array.from(cp.state), epilogueDef())); else if (cp.endless) startEndless(cp.endless.seed, cp.endless.depth, deserialize(Int32Array.from(cp.state), endlessVerse(cp.endless.seed, cp.endless.depth, cp.endless.mods || 0)), cp.endless.mods || 0); else startChapter(cp.chapter, deserialize(Int32Array.from(cp.state))); } catch { if (cp.epilogue) startEpilogue(); else if (cp.endless) startEndless(cp.endless.seed, cp.endless.depth, null, cp.endless.mods || 0); else startChapter(cp.chapter); } } },
+    { label: 'Chapters', disabled: G.save.unlocked < 2, action: chapterMenu }, { label: 'Endless Choir', disabled: !endlessUnlocked(), action: endlessMenu }, { label: 'Epilogue', disabled: !G.save.endings.includes(2), action: () => startEpilogue() }, { label: 'How to play', action: helpMenu }, { label: 'Settings', action: () => settingsMenu(title) },
   ], `v${VERSION}`);
   // bound to this title card: hud.menu() replaces the card, so a reply after Chapters/Settings/How to play (or a newer title) is dropped
   const card = document.querySelector('#menu .card');
@@ -256,15 +259,19 @@ function crashed(report) {
 }
 /** Crash recovery: the same chapter, or the same Endless verse (unlike the pause menu's one-life 'Restart run'). */
 function recoverFromCrash() {
-  freshPipeline(); G.mode = 'play'; if (G.endless) startEndless(G.endless.seed, G.endless.depth, null, G.endless.mods); else startChapter(G.chapter);
+  freshPipeline(); G.mode = 'play'; if (G.epilogue) startEpilogue(); else if (G.endless) startEndless(G.endless.seed, G.endless.depth, null, G.endless.mods); else startChapter(G.chapter);
 }
 function recordBest(depth) { const by = (G.save.endlessBestBy ||= {}), k = G.endless.mods || 0; by[k] = Math.max(by[k] || 0, depth); }
 function died() {
+  if (G.epilogue) { G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.(); if (G.save.checkpoint?.epilogue) G.save.checkpoint = null; storeSave(G.save);
+    G.hud.menu('UNWRITTEN', html`<p>They heard you. Even the silent can be heard, if they breathe.</p>`, [{ label: 'Walk again', primary: true, action: () => startEpilogue() }, { label: 'Title', action: title }], 'EPILOGUE'); return; }
   if (G.endless) { const d = G.endless.depth - 1; G.save.endlessBest = Math.max(G.save.endlessBest || 0, d); recordBest(d); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); /* a campaign save survives an Endless run */
     G.telemetry?.track('endless_end', { depth: d }); G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.();
     G.hud.menu('UNWRITTEN', html`<p>The choir goes on without you. Verses completed: ${d}. Seed code <strong>${encodeSeed(G.endless.seed)}</strong> — share it to let others sing the same verses.</p>`, [{ label: 'Begin again', primary: true, action: () => startEndless(G.endless.seed, 1, null, G.endless.mods) }, { label: 'Copy seed code', action: () => copyFromDialog(encodeSeed(G.endless.seed), 'Seed code copied.') }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
   G.mode = 'dead'; G.input.enabled = false; document.exitPointerLock?.(); G.hud.menu('UNWRITTEN', html`<p>The page forgets you. The stanza begins again.</p>`, [{ label: 'Begin the chapter again', primary: true, action: () => startChapter(G.chapter) }, { label: 'Title', action: title }], `CHAPTER ${G.sim.def.id}`); }
 function completed() {
+  if (G.epilogue) { G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.(); G.save.epilogue = true; if (G.save.checkpoint?.epilogue) G.save.checkpoint = null; storeSave(G.save);
+    G.hud.menu(EPILOGUE_TITLE.toUpperCase(), html`${EPILOGUE_CLOSING.map(t => html`<p>${t}</p>`)}<p>Time ${(G.sim.tick / TICK_HZ).toFixed(1)}s</p>`, [{ label: 'Title', primary: true, action: title }], 'EPILOGUE · THE END'); return; }
   if (G.endless) { const { seed, depth, mods } = G.endless; G.save.endlessBest = Math.max(G.save.endlessBest || 0, depth); recordBest(depth); if (G.save.checkpoint?.endless) G.save.checkpoint = null; storeSave(G.save); G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.();
     G.hud.menu(`VERSE ${depth}`, html`<p class="stanza">${STANZAS[(depth - 1) % STANZAS.length].slice(0, 4).join('\n')}</p><p>Time ${(G.sim.tick / TICK_HZ).toFixed(1)}s · written ${G.sim.p.hp}/${TUNE.hpMax}</p>`, [{ label: `Verse ${depth + 1}`, primary: true, action: () => startEndless(seed, depth + 1, null, mods) }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
   G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.(); const next = G.chapter + 1, secs = (G.sim.tick / TICK_HZ).toFixed(1);
@@ -276,7 +283,7 @@ function completed() {
   storeSave(G.save);
   const stanza = html`<p class="stanza">${STANZAS[G.sim.def.id - 1].join('\n')}</p><p>Time ${secs}s · written ${G.sim.p.hp}/${TUNE.hpMax} · state hash ${hashState(G.sim).toString(16)}${assisted ? ` · assist: ${Math.round(S().speed * 100)}% game speed` : ''}</p>${runResult && S().speedrun ? splitsTable(runResult) : ''}`;
   if (G.sim.c.ending) { const sang = G.sim.c.ending === 1; if (!G.save.endings.includes(G.sim.c.ending)) G.save.endings.push(G.sim.c.ending); storeSave(G.save);
-    G.hud.menu(sang ? 'YOU SING' : 'YOU ARE SILENT', html`${stanza}<p>${sang ? 'The sleeper wakes with your face. The Choir is whole again, ceaseless and sorrowless, and there is no one left on the shore to hear it.' : 'You cross without a sound. Behind you they renew the world, in spite of a dreamer who slumbers, and a singer who sings no more.'}</p>`, [{ label: 'Title', primary: true, action: title }], `ENDING ${G.sim.c.ending} OF 2`); return; }
+    G.hud.menu(sang ? 'YOU SING' : 'YOU ARE SILENT', html`${stanza}<p>${sang ? 'The sleeper wakes with your face. The Choir is whole again, ceaseless and sorrowless, and there is no one left on the shore to hear it.' : 'You cross without a sound. Behind you they renew the world, in spite of a dreamer who slumbers, and a singer who sings no more.'}</p>`, [{ label: 'Title', primary: true, action: title }].concat(sang ? [] : [{ label: 'Epilogue: A Singer Who Sings No More', action: () => startEpilogue() }]), `ENDING ${G.sim.c.ending} OF 2`); return; }
   G.hud.menu(G.sim.def.title.toUpperCase(), stanza, next < CHAPTERS.length ? [{ label: `Continue to chapter ${next + 1}`, primary: true, action: () => startChapter(next) }, { label: 'Title', action: title }] : [{ label: 'Title', primary: true, action: title }], next < CHAPTERS.length ? 'STANZA COMPLETE' : 'END OF THIS BUILD');
 }
 
@@ -363,7 +370,7 @@ async function boot() {
     const oc = new OffscreenCanvas(G.atlasImage.width, G.atlasImage.height), o2 = oc.getContext('2d'); o2.drawImage(G.atlasImage, 0, 0); const d = o2.getImageData(0, 0, oc.width, oc.height);
     G.atlasPx = { pixels: d.data, w: oc.width, h: oc.height, channels: 4 }; if (S().quality !== 'auto') S().quality = 'low'; }
   G.telemetryConfig = await loadTelemetryConfig();
-  G.telemetry = createTelemetry({ version: VERSION, endpoint: G.telemetryConfig?.endpoint ?? null, getState: () => G.sim ? { chapter: G.chapter + 1, endless: G.endless, seed: G.runSeed, tick: G.sim.tick, hash: G.failingInput == null ? hashState(G.sim) : null, failingInput: G.failingInput, log: G.log, base: G.base, tier: G.pl?.quality } : {} });
+  G.telemetry = createTelemetry({ version: VERSION, endpoint: G.telemetryConfig?.endpoint ?? null, getState: () => G.sim ? { chapter: G.chapter + 1, endless: G.endless, epilogue: G.epilogue || undefined, seed: G.runSeed, tick: G.sim.tick, hash: G.failingInput == null ? hashState(G.sim) : null, failingInput: G.failingInput, log: G.log, base: G.base, tier: G.pl?.quality } : {} });
   G.telemetry.install(report => crashed(report));
   G.input = createInput(canvas); G.input.onPause = pause;
   G.input.onMenuBack = intent => { if (G.mode === 'pause') { resume(); return; } if (intent === 'back') [...document.querySelectorAll('#menu nav button')].find(b => /^(Back|Done)$/.test(b.textContent))?.click(); };
