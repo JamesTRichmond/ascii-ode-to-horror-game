@@ -62,3 +62,6 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
 #vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(120, 8, 4, .55) 100%); }
 #resonance { color: var(--cyan); letter-spacing: .08em; }
 #resonance:empty { display: none; }
+#soundcap { align-self: flex-start; margin: 8px 0 auto; max-width: min(46ch, 100%); white-space: pre-line; padding: 4px 10px; background: var(--panel); border-left: 3px solid var(--cyan); color: var(--ink); line-height: 1.5; max-height: 4.6em; overflow: hidden; }
+#soundcap:empty { display: none; }
+@media (max-height: 520px), (max-width: 520px) { #soundcap { max-height: 1.55em; } } /* small screens: only the newest caption (it is listed first) */
