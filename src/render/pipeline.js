@@ -132,7 +132,7 @@ export function renderFrame(pl, view, dt) {
   for (const e of view.ents) if ((e.type === ET.CHORISTER && sim.c.phase === 1) || e.type === ET.COMER) addEmitter(c, e.x, e.z, 1.1, [1.3, 1.1, 0.6], tm);
   const surge = sim.def.dawn ? (sim.c.stage === 2 ? 1 : sim.c.stage === 1 ? 0.35 : 0.08) : 0;
   const sky = th.skyHorizon.map((v, k) => v * 0.6 + th.ambient[k] + surge * [1.6, 1.0, 0.5][k]);
-  solveCascades(c, { sigma: th.fog * tm * pl.opts.fogScale, sky, bounces: pl.opts.bounces, albedo: 0.5, gain: 0.8 });
+  solveCascades(c, { sigma: th.fog * tm * pl.opts.fogScale, sky, bounces: pl.opts.bounces, albedo: 0.5, gain: 0.8, bilinearFix: pl.quality !== 'low' }); // low tier keeps the cheaper plain merge
   if (world.dirty) {
     if (sim.def.rule & RULE.DAWN) shelterShadow(sim, pl.shadow); // the shade drawn is exactly the shade that protects
     else if (th.dirColor[0] > 0) directionalShadow(world, th.dir, pl.shadow);

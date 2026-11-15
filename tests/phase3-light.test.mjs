@@ -53,6 +53,15 @@ const lab = (wall, opts = {}) => { // the guide's lab layout: cyan source left, 
   addEmitter(c, 15, 19, 2, opts.rgb || [0.5, 2.6, 2.4], 1); return solveCascades(c, { bounces: 0, ...opts });
 };
 const fluenceAt = (c, tx, ty) => { const p = Math.floor(ty / 4) * c.nx + Math.floor(tx / 4); return [c.fluence[p * 3], c.fluence[p * 3 + 1], c.fluence[p * 3 + 2]]; };
+test('cascade fluence against a brute-force ray-traced reference: the bilinear fix removes the wall-end leak', t => {
+  const W = 64, H = 40, sigma = 0.018, err = fix => { const c = lab(true, { bilinearFix: fix, sigma }); let all = 0, n = 0, behind = 0, nb = 0;
+    const ref = (px, py) => { const Ts = Math.exp(-sigma * 0.25); let g = 0; for (let k = 0; k < 1024; k++) { const an = ((k + 0.5) / 1024) * Math.PI * 2, cs = Math.cos(an), sn = Math.sin(an); let tr = 1; for (let s = 0.125; s < 200; s += 0.25) { const x = Math.floor(px + cs * s), y = Math.floor(py + sn * s); if (x < 0 || y < 0 || x >= W || y >= H || c.solid[y * W + x]) break; g += tr * c.emit[(y * W + x) * 3 + 1] * 0.15 * 0.25; tr *= Ts; } } return g / 1024; };
+    for (let py = 0; py < c.ny; py++) for (let px = 0; px < c.nx; px++) { const x = (px + 0.5) * 4, y = (py + 0.5) * 4; if (c.solid[Math.floor(y) * W + Math.floor(x)]) continue; const r = ref(x, y), v = c.fluence[(py * c.nx + px) * 3 + 1]; all += Math.abs(v - r) / Math.max(r, 2e-3); n++; if (x > 33 && y > 8 && y < 31) { behind += Math.abs(v - r); nb++; } }
+    return { rel: all / n, behind: behind / nb }; };
+  const plain = err(false), fixed = err(true);
+  t.diagnostic(`mean relative error vs reference: plain merge ${plain.rel.toFixed(3)}, bilinear fix ${fixed.rel.toFixed(3)}; mean abs error behind the wall ${plain.behind.toExponential(2)} -> ${fixed.behind.toExponential(2)}`);
+  assert.ok(fixed.rel < plain.rel * 0.5 && fixed.behind < plain.behind * 0.05);
+});
 test('four finite cascade buffers with doubling angular resolution', t => {
   const c = lab(true); assert.equal(c.levels.length, LEVELS);
   for (const [i, l] of c.levels.entries()) { assert.ok(l.data.every(Number.isFinite)); assert.equal(l.dirs, 8 * 2 ** i); assert.equal(l.step, 4 * 2 ** i); if (i) assert.equal(l.near, c.levels[i - 1].far); }
@@ -61,7 +70,7 @@ test('four finite cascade buffers with doubling angular resolution', t => {
 test('wall occluder: a bright source behind a wall does not leak through', t => {
   const open = lab(false), walled = lab(true), a = fluenceAt(open, 42, 19)[1], b = fluenceAt(walled, 42, 19)[1], lit = fluenceAt(walled, 22, 19)[1];
   t.diagnostic(`fluence behind wall position: open ${a.toExponential(2)}, walled ${b.toExponential(2)} (${(b / a * 100).toFixed(1)}%); lit side ${lit.toExponential(2)}`);
-  assert.ok(a > 1e-4, 'light arrives without the wall'); assert.ok(b < a * 0.2, 'wall blocks direct transport (residual is interpolation leak, reported above)'); assert.ok(lit > b * 20);
+  assert.ok(a > 1e-4, 'light arrives without the wall'); assert.ok(b < a * 0.01, 'wall blocks direct transport: the bilinear-fix merge leaves no interpolation leak'); assert.ok(lit > b * 20);
   assert.equal(walled.emit[(20 * 64 + 31) * 3], 0, 'the opaque wall has no source emission'); assert.ok(walled.valid.some(v => v === 0), 'probes inside the wall are flagged invalid, not read as black');
 });
 test('bounded multi-bounce: diffuse colour bleed around a corner, energy stays bounded, residual falls', t => {
