@@ -122,7 +122,7 @@ async function copyDiagnostics() {
   try { await navigator.clipboard.writeText(text); G.hud.alert('DIAGNOSTIC REPORT COPIED', 2); } catch { G.hud.alert('COPY BLOCKED — SEE CONSOLE', 2); console.info(text); }
 }
 function crashed(report) {
-  if (G.mode === 'crashed') return; G.mode = 'crashed'; G.input.enabled = false; document.exitPointerLock?.(); G.save.lastCrash = { at: report.at, message: report.message, chapter: report.chapter }; storeSave(G.save);
+  if (G.mode === 'crashed') return; cancelDeferred(); G.mode = 'crashed'; G.input.enabled = false; document.exitPointerLock?.(); G.save.lastCrash = { at: report.at, message: report.message, chapter: report.chapter }; storeSave(G.save);
   G.hud.menu('SOMETHING BROKE', `<p>The game hit an error and stopped this chapter. Your saved progress is safe.</p><p>The report below contains the chapter, seed and your inputs so the bug can be replayed exactly. It contains nothing about you.</p><p><code>${String(report.message).replace(/[<>&]/g, '')}</code></p>`,
     [{ label: 'Copy crash report', primary: true, action: async () => { try { await navigator.clipboard.writeText(JSON.stringify(report)); G.hud.alert('CRASH REPORT COPIED', 2); } catch { console.info(JSON.stringify(report)); } } }, { label: 'Restart chapter', action: () => { G.mode = 'play'; restart(); } }, { label: 'Title', action: title }], 'ERROR');
 }
