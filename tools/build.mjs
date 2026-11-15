@@ -49,6 +49,8 @@ console.log(`dist/: ${files.length + 1} files, ${(bytes / 1024).toFixed(0)} KiB,
 if (!process.argv.includes('--no-pack')) {
   const rel = path.join(root, 'release'); fs.mkdirSync(rel, { recursive: true });
   const out = path.join(rel, `ode-${pkg.version}.tar.gz`);
+  let tarVersion = ''; try { tarVersion = execFileSync('tar', ['--version'], { encoding: 'utf8' }); } catch { /* reported below */ }
+  if (!/GNU tar/.test(tarVersion)) { console.error('packing needs GNU tar (--sort/--mtime/--owner); install it (macOS: brew install gnu-tar, then put gtar first on PATH as tar) or use --no-pack'); process.exit(1); }
   const tarball = execFileSync('tar', ['--sort=name', `--mtime=@${epoch}`, '--owner=0', '--group=0', '--numeric-owner', '--mode=u=rwX,go=rX', '-cf', '-', '-C', dist, '.'], { maxBuffer: 1 << 28 });
   fs.writeFileSync(out, zlib.gzipSync(tarball, { level: 9 })); // node's gzip header carries no timestamp
   const sha = crypto.createHash('sha256').update(fs.readFileSync(out)).digest('hex');
