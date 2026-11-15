@@ -38,7 +38,7 @@ async function loadAssets() {
 function applySettings() {
   const s = S(), root = document.documentElement; if (G.telemetry) G.telemetry.enabled = !!s.telemetry && !!G.telemetryConfig;
   root.style.setProperty('--scale', s.textScale); root.classList.toggle('contrast', !!s.contrast); root.classList.toggle('still', !!s.reducedMotion);
-  G.audio.setVolume(s.volume); if (G.input) { G.input.sensitivity = s.sensitivity; G.input.vibration = s.vibration !== false; G.input.setBindings(normalise(s.bindings)); } $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
+  G.audio.setVolume(s.volume); if (G.input) { G.input.sensitivity = s.sensitivity; G.input.vibration = s.vibration !== false; G.input.setBindings(normalise(s.bindings)); G.input.toggle = !!s.toggleVoice; if (!s.toggleVoice) G.input.latched = 0; } $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (s.quality === 'auto') { G.auto ||= createAutoQuality({ start: 'medium' }); } else G.auto = null;
   // render thread: the worker needs the WebGL output path and is bypassed while a G-buffer inspection view is shown
   const thread = s.renderThread === 'worker' && G.out && !s.debug ? 'worker' : 'local';
@@ -148,12 +148,14 @@ function settingsMenu(back) {
     <label>Sound captions (direction and distance) <select data-k="soundCaptions">${opt(false, !!s.soundCaptions, 'off')}${opt(true, !!s.soundCaptions, 'on')}</select></label>
     <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-k="volume"></label>
     <label>Controller vibration <select data-k="vibration">${opt(true, s.vibration !== false, 'on')}${opt(false, s.vibration !== false, 'off')}</select></label>
+    <label>Game speed (assist) <select data-k="speed">${[1, 0.85, 0.7, 0.5].map(v => opt(v, s.speed ?? 1, v === 1 ? '100% (standard)' : `${v * 100}%`)).join('')}</select></label>
+    <label>Hum and hold breath <select data-k="toggleVoice">${opt(false, !!s.toggleVoice, 'hold the key')}${opt(true, !!s.toggleVoice, 'press to toggle')}</select></label>
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
     <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs')).join('')}</select></label>`,
   [{ label: 'Done', primary: true, action: back }, { label: 'Controls', action: () => controlsMenu(back) }, { label: 'Copy diagnostic report', action: copyDiagnostics }, { label: 'Transfer save', action: () => transferMenu(back) }], 'ODE');
-  m.onchange = e => { const k = e.target.dataset.k; if (!k) return; const v = e.target.value; S()[k] = v === 'true' ? true : v === 'false' ? false : e.target.type === 'range' || k === 'textScale' ? +v : v; applySettings(); };
+  m.onchange = e => { const k = e.target.dataset.k; if (!k) return; const v = e.target.value; S()[k] = v === 'true' ? true : v === 'false' ? false : e.target.type === 'range' || k === 'textScale' || k === 'speed' ? +v : v; applySettings(); };
 }
 /** Copy a report from the open dialog. Status is announced inside the dialog; if the clipboard is unavailable or
  *  refused, the report appears in a selectable read-only field in the same dialog so the player can copy it by hand. */
@@ -221,8 +223,8 @@ function completed() {
     G.hud.menu(`VERSE ${depth}`, html`<p class="stanza">${STANZAS[(depth - 1) % STANZAS.length].slice(0, 4).join('\n')}</p><p>Time ${(G.sim.tick / TICK_HZ).toFixed(1)}s · written ${G.sim.p.hp}/${TUNE.hpMax}</p>`, [{ label: `Verse ${depth + 1}`, primary: true, action: () => startEndless(seed, depth + 1, null, mods) }, { label: 'Title', action: title }], 'ENDLESS CHOIR'); return; }
   G.mode = 'complete'; G.input.enabled = false; document.exitPointerLock?.(); const next = G.chapter + 1, secs = (G.sim.tick / TICK_HZ).toFixed(1);
   G.telemetry?.perf(G.pl.quality, G.frames, G.intervals);
-  G.save.unlocked = Math.max(G.save.unlocked, Math.min(CHAPTERS.length, next + 1)); G.save.checkpoint = null; G.save.best[G.sim.def.id] = Math.min(G.save.best[G.sim.def.id] ?? 1e9, G.sim.tick); storeSave(G.save);
-  const stanza = html`<p class="stanza">${STANZAS[G.sim.def.id - 1].join('\n')}</p><p>Time ${secs}s · written ${G.sim.p.hp}/${TUNE.hpMax} · state hash ${hashState(G.sim).toString(16)}</p>`;
+  G.save.unlocked = Math.max(G.save.unlocked, Math.min(CHAPTERS.length, next + 1)); G.save.checkpoint = null; const assisted = (S().speed || 1) < 1, book = assisted ? (G.save.bestAssisted ||= {}) : G.save.best; book[G.sim.def.id] = Math.min(book[G.sim.def.id] ?? 1e9, G.sim.tick); storeSave(G.save); // assisted runs keep their own records
+  const stanza = html`<p class="stanza">${STANZAS[G.sim.def.id - 1].join('\n')}</p><p>Time ${secs}s · written ${G.sim.p.hp}/${TUNE.hpMax} · state hash ${hashState(G.sim).toString(16)}${assisted ? ` · assist: ${Math.round(S().speed * 100)}% game speed` : ''}</p>`;
   if (G.sim.c.ending) { const sang = G.sim.c.ending === 1; if (!G.save.endings.includes(G.sim.c.ending)) G.save.endings.push(G.sim.c.ending); storeSave(G.save);
     G.hud.menu(sang ? 'YOU SING' : 'YOU ARE SILENT', html`${stanza}<p>${sang ? 'The sleeper wakes with your face. The Choir is whole again, ceaseless and sorrowless, and there is no one left on the shore to hear it.' : 'You cross without a sound. Behind you they renew the world, in spite of a dreamer who slumbers, and a singer who sings no more.'}</p>`, [{ label: 'Title', primary: true, action: title }], `ENDING ${G.sim.c.ending} OF 2`); return; }
   G.hud.menu(G.sim.def.title.toUpperCase(), stanza, next < CHAPTERS.length ? [{ label: `Continue to chapter ${next + 1}`, primary: true, action: () => startChapter(next) }, { label: 'Title', action: title }] : [{ label: 'Title', primary: true, action: title }], next < CHAPTERS.length ? 'STANZA COMPLETE' : 'END OF THIS BUILD');
@@ -272,7 +274,7 @@ function frameBody(t) {
   if (!G.sim || G.mode === 'title' || G.mode === 'boot') return;
   let ticks = 0; const simT0 = performance.now();
   if (G.mode === 'play') {
-    ticks = consumeTicks(G, elapsed);
+    ticks = consumeTicks(G, elapsed, MAX_CATCHUP, S().speed || 1); // assist speed scales wall time only; each tick is unchanged
     for (let k = 0; k < ticks; k++) {
       G.prev = snapshot(G.sim); const word = G.bot ? botInput(G.bot, G.sim) : G.input.poll();
       if (G.log.length >= INPUT_CAP) { G.base = { tick: G.sim.tick, state: Array.from(serialize(G.sim)) }; G.log = []; } // re-base instead of truncating
