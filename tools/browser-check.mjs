@@ -20,7 +20,9 @@ catch { console.error('Playwright is not installed. Set PLAYWRIGHT_PATH to its p
 const server = spawn(process.execPath, [path.join(root, 'tools/serve.mjs'), String(port), root], { stdio: 'ignore' });
 await new Promise(r => setTimeout(r, 600));
 const args = arg('gpu', false) ? [] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
-const browser = await chromium.launch({ args: [...args, '--autoplay-policy=no-user-gesture-required'] });
+let browser;
+try { browser = await chromium.launch({ args: [...args, '--autoplay-policy=no-user-gesture-required'] }); }
+catch (e) { server.kill(); console.error('Chromium failed to launch:', e.message); process.exit(2); } // never leave the server holding the port
 const base = `http://localhost:${port}/`, report = { browser: browser.version(), quality, seconds, chapters: [], ui: null, hud: [] };
 const watch = p => { const errs = []; p.on('pageerror', e => errs.push(String(e))); p.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !/AudioContext was not allowed/.test(m.text())) errs.push(m.text()); }); return errs; };
 const q = (a, f) => { const s = [...a].sort((x, y) => x - y); return +(s[Math.min(s.length - 1, Math.floor(s.length * f))] || 0).toFixed(1); };
