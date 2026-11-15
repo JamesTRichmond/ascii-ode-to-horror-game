@@ -110,16 +110,16 @@ function helpMenu() {
 function settingsMenu(back) {
   const s = S(), opt = (v, cur, t) => html`<option value="${v}" ${String(cur) === String(v) ? html`selected` : ''}>${t}</option>`;
   const m = G.hud.menu('SETTINGS', html`
-    <label>Render quality <select data-k="quality">${opt('auto', s.quality, 'auto (adapts to this machine)')}${Object.keys(QUALITY).map(q => opt(q, s.quality, `${q} (${QUALITY[q][0]}×${QUALITY[q][1]})`)).join('')}</select></label>
+    <label>Render quality <select data-k="quality">${opt('auto', s.quality, 'auto (adapts to this machine)')}${Object.keys(QUALITY).map(q => opt(q, s.quality, `${q} (${QUALITY[q][0]}×${QUALITY[q][1]})`))}</select></label>
     <label>Reduced motion <select data-k="reducedMotion">${opt(false, s.reducedMotion, 'off')}${opt(true, s.reducedMotion, 'on')}</select></label>
-    <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%')).join('')}</select></label>
+    <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%'))}</select></label>
     <label>High-contrast HUD <select data-k="contrast">${opt(false, s.contrast, 'off')}${opt(true, s.contrast, 'on')}</select></label>
     <label>Captions <select data-k="captions">${opt(true, s.captions, 'on')}${opt(false, s.captions, 'off')}</select></label>
     <label>Volume <input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-k="volume"></label>
     <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}" data-k="sensitivity"></label>
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
-    <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs')).join('')}</select></label>`,
+    <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs'))}</select></label>`,
   [{ label: 'Done', primary: true, action: back }, { label: 'Copy diagnostic report', action: copyDiagnostics }], 'ODE');
   m.onchange = e => { const k = e.target.dataset.k; if (!k) return; const v = e.target.value; S()[k] = v === 'true' ? true : v === 'false' ? false : e.target.type === 'range' || k === 'textScale' ? +v : v; applySettings(); };
 }

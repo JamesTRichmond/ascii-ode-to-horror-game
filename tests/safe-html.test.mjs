@@ -50,3 +50,12 @@ test('no HTML or script sink in src outside safe-html.js', () => {
   const hits = walk(path.join(root, 'src')).filter(f => !f.endsWith('safe-html.js')).flatMap(f => fs.readFileSync(f, 'utf8').split('\n').map((l, i) => SINK.test(l) ? `${path.relative(root, f)}:${i + 1}` : null).filter(Boolean));
   assert.deepEqual(hits, [], 'route markup through setHTML(el, html`…`) from src/game/safe-html.js');
 });
+
+test('lists of html`` fragments are interpolated as arrays, never joined into a string first', () => {
+  const opt = v => html`<option value="${v}">${v}</option>`;
+  assert.equal(String(html`<select>${['a', 'b'].map(opt)}</select>`), '<select><option value="a">a</option><option value="b">b</option></select>');
+  // joining turns the fragments into a plain string, which html`` then escapes: the options would show as text
+  assert.match(String(html`<select>${['a'].map(opt).join('')}</select>`), /&lt;option/);
+  const hits = ['src/game/main.js', 'src/game/hud.js'].flatMap(f => fs.readFileSync(path.join(root, f), 'utf8').split('\n').map((l, i) => /<\w[^`]*\$\{[^`]*\.join\(''\)\}/.test(l) ? `${f}:${i + 1}` : null).filter(Boolean));
+  assert.deepEqual(hits, [], "drop .join('') inside html`` markup; pass the array");
+});
