@@ -65,3 +65,5 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
 #soundcap { align-self: flex-start; margin: 8px 0 auto; max-width: min(46ch, 100%); white-space: pre-line; padding: 4px 10px; background: var(--panel); border-left: 3px solid var(--cyan); color: var(--ink); line-height: 1.5; max-height: 4.6em; overflow: hidden; }
 #soundcap:empty { display: none; }
 @media (max-height: 520px), (max-width: 520px) { #soundcap { max-height: 1.55em; } } /* small screens: only the newest caption (it is listed first) */
+.binds { border-collapse: collapse; width: 100%; } .binds th { text-align: left; font-weight: 400; color: var(--dim); padding: 2px 8px 2px 0; } .binds td { padding: 2px 6px; }
+.binds kbd { font: inherit; color: var(--ink); border: 1px solid var(--line); padding: 0 6px; white-space: nowrap; }
