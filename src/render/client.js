@@ -1,7 +1,8 @@
 // Render client: the same API as pipeline.js (createPipeline, setScene, adoptScene, renderFrame, burst), backed either
 // by the in-thread pipeline ('local') or by a module Web Worker ('worker'). In worker mode the shell keeps a proxy
 // with the fields it reads (w, h, quality, opts, stats, sel.inst/count/stats, qt.stats, cam.yaw, flash); each frame
-// posts the serialized simulation state plus the interpolated view, and draws the newest instance stream received.
+// posts the serialized simulation state plus the interpolated view (including the camera mode and the player pose it
+// carries), and draws the newest instance stream received.
 // One frame is in flight at a time: if the worker is still busy, the newest view replaces the queued one (no backlog).
 import * as local from './pipeline.js';
 import { QUALITY } from './pipeline.js';

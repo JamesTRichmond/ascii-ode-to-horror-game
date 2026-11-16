@@ -7,6 +7,7 @@ import { createGLOutput } from '../render/output_gl.js';
 import { compositeCPU, debugImage } from '../render/output_cpu.js';
 import { CVD_MODES, correction, columnMajor, correctHex } from '../render/cvd.js';
 import { CELL } from '../render/gbuffer.js';
+import { DIMETRIC } from '../render/camera.js';
 import { createSim, step, serialize, deserialize, hashState, TICK_HZ, ET, TUNE } from '../sim/sim.js';
 import { CHAPTERS, STANZAS } from '../sim/chapters.js';
 import { createBot, botInput } from '../sim/bot.js';
@@ -50,8 +51,14 @@ function applySettings() {
   // colour-vision correction: one matrix for the scene (GPU and CPU paths) and the same mapping for HUD colours
   const mode = CVD_MODES.includes(s.cvd) ? s.cvd : 'off', C = correction(mode); G.cvd = mode === 'off' ? null : C; G.out?.setCvd?.(columnMajor(C));
   for (const [v, base, hi] of [['--red', '#ff6b5e', '#ff8a80'], ['--cyan', '#7fe3d4', '#99ffff'], ['--gold', '#e9c46a', '#ffe08a']]) { if (mode === 'off') root.style.removeProperty(v); else root.style.setProperty(v, correctHex(s.contrast ? hi : base, mode)); } // the stylesheet palette (incl. high contrast) when off
-  G.pl.opts.reducedMotion = !!s.reducedMotion; G.pl.opts.autoExposure = s.eyeAdaptation !== false; G.hud.still = !!s.reducedMotion; storeSave(G.save);
+  G.pl.opts.reducedMotion = !!s.reducedMotion; G.pl.opts.autoExposure = s.eyeAdaptation !== false; G.hud.still = !!s.reducedMotion;
+  if (G.input) { G.input.screenYaw = cameraMode() === 'first' ? null : DIMETRIC.yaw; if (G.input.screenYaw != null) document.exitPointerLock?.(); } // the dimetric camera never captures the mouse
+  storeSave(G.save);
 }
+/** 'dimetric' (default) or 'first': the saved camera setting, validated. */
+const cameraMode = () => (S().camera === 'first' ? 'first' : 'dimetric');
+/** Listener and caption orientation (radians): the screen's up direction under the dimetric camera, the facing in first person. */
+const listenYaw = () => (cameraMode() === 'first' ? undefined : DIMETRIC.yaw);
 function setTier(tier) {
   if (G.pl && G.pl.quality === tier) return;
   const prev = G.pl; G.pl = createPipeline(G.atlas, G.noise, tier);
@@ -170,13 +177,15 @@ function seedCodeMenu() {
 function chapterMenu() { G.hud.menu('CHAPTERS', '', CHAPTERS.map((c, i) => ({ label: `${c.id}. ${c.title}`, disabled: i >= G.save.unlocked, action: () => startChapter(i) })).concat({ label: 'Back', action: title }), 'SELECT A STANZA'); }
 function helpMenu() {
   const b = normalise(S().bindings), k = a => describe(b, a);
-  G.hud.menu('HOW TO PLAY', html`<dl><dt>${k('FWD')} · ${k('BACK')} · ${k('LEFT')} · ${k('RIGHT')}</dt><dd>Walk and strafe</dd><dt>Mouse / ${k('TURNL')} · ${k('TURNR')}</dt><dd>Turn (click the view to capture the mouse)</dd><dt>${k('HUM')} (hold)</dt><dd>Hum — light, and be heard</dd><dt>${k('CHORD')} / click</dt><dd>Chord — stagger what is close</dd><dt>${k('HOLD')} (hold)</dt><dd>Hold your breath — silent, slow</dd><dt>${k('USE')}</dt><dd>Use</dd><dt>Esc / ${k('PAUSE')}</dt><dd>Pause</dd></dl><p>Change any key under Settings → Controls.</p><p>Controller: left stick or D-pad walk · right stick turn · RT hum · LT hold breath · RB or X chord · A use · Start pause. In menus, the D-pad moves, A selects, B backs out.</p><p>Your voice costs Breath. Everything that hears you comes.</p>`, [{ label: 'Back', primary: true, action: title }], 'ODE');
+  const dim = cameraMode() !== 'first';
+  G.hud.menu('HOW TO PLAY', html`<dl><dt>${k('FWD')} · ${k('BACK')} · ${k('LEFT')} · ${k('RIGHT')}</dt><dd>${dim ? 'Walk up, down, left and right on the screen (the singer turns to face the way they walk)' : 'Walk and strafe'}</dd><dt>${dim ? html`${k('TURNL')} · ${k('TURNR')}` : html`Mouse / ${k('TURNL')} · ${k('TURNR')}`}</dt><dd>${dim ? 'Turn in place' : 'Turn (click the view to capture the mouse)'}</dd><dt>${k('HUM')} (hold)</dt><dd>Hum — light, and be heard</dd><dt>${k('CHORD')} / click</dt><dd>Chord — stagger what is close</dd><dt>${k('HOLD')} (hold)</dt><dd>Hold your breath — silent, slow</dd><dt>${k('USE')}</dt><dd>Use</dd><dt>Esc / ${k('PAUSE')}</dt><dd>Pause</dd></dl><p>Change any key under Settings → Controls. ${dim ? 'The camera looks down on the singer from a fixed angle; Settings → Camera switches to first person.' : 'You see through the singer\'s eyes; Settings → Camera switches to the overhead view.'}</p><p>Controller: left stick or D-pad ${dim ? 'walk in any screen direction' : 'walk'} · right stick turn · RT hum · LT hold breath · RB or X chord · A use · Start pause. In menus, the D-pad moves, A selects, B backs out.</p><p>Your voice costs Breath. Everything that hears you comes.</p>`, [{ label: 'Back', primary: true, action: title }], 'ODE');
 }
 function settingsMenu(back) {
   const s = S(), opt = (v, cur, t) => html`<option value="${v}" ${String(cur) === String(v) ? html`selected` : ''}>${t}</option>`;
   const m = G.hud.menu('SETTINGS', html`
     <label>Render quality <select data-k="quality">${opt('auto', s.quality, 'auto (adapts to this machine)')}${Object.keys(QUALITY).map(q => opt(q, s.quality, `${q} (${QUALITY[q][0]}×${QUALITY[q][1]})`))}</select></label>
     <label>Render thread <select data-k="renderThread">${opt('worker', s.renderThread || 'worker', 'worker (frees the main thread)')}${opt('local', s.renderThread, 'main thread')}</select></label>
+    <label>Camera <select data-k="camera">${opt('dimetric', cameraMode(), 'dimetric (overhead, follows the singer)')}${opt('first', cameraMode(), 'first person')}</select></label>
     <label>Eye adaptation <select data-k="eyeAdaptation">${opt(true, s.eyeAdaptation !== false, 'on')}${opt(false, s.eyeAdaptation !== false, 'off')}</select></label>
     <label>Reduced motion <select data-k="reducedMotion">${opt(false, s.reducedMotion, 'off')}${opt(true, s.reducedMotion, 'on')}</select></label>
     <label>HUD text size <select data-k="textScale">${[1, 1.25, 1.5, 2].map(v => opt(v, s.textScale, v * 100 + '%'))}</select></label>
@@ -290,12 +299,12 @@ function completed() {
 // ---------------------------------------------------------------- event presentation
 const CY = [0.5, 1.4, 1.3], RED = [1.6, 0.25, 0.15], PALE = [1.1, 1.05, 0.95], GOLDC = [1.5, 1.1, 0.4];
 function present(e) {
-  const pl = G.pl, x = e.x * U, z = e.z * U, hud = G.hud, def = G.sim.def; G.audio.event(e); G.telemetry?.event(e, G.sim); if (S().soundCaptions) hud.sound(captionFor(e, G.sim.p));
+  const pl = G.pl, x = e.x * U, z = e.z * U, yaw = (G.sim.p.ang / 4096) * Math.PI * 2, hud = G.hud, def = G.sim.def; G.audio.event(e); G.telemetry?.event(e, G.sim); if (S().soundCaptions) hud.sound(captionFor(e, G.sim.p, listenYaw())); // voice bursts leave the singer's mouth, whichever camera watches
   const split = G.run?.onEvent(e, G.sim.tick); if (split && S().speedrun) showSplit(split);
   switch (e.type) {
     case 'measure': burst(pl, x, 1.2, z, 40, 3.5, CY, 1.1); hud.alert(`A MEASURE RETURNS · ${e.a}/${def.need}`); hud.caption(STANZAS[def.id - 1].slice(2 + e.a * 2 - 2, 2 + e.a * 2 + 2).slice(0, 2)); break;
-    case 'hum': burst(pl, x + Math.cos(pl.cam.yaw) * 0.8, 1.2, z + Math.sin(pl.cam.yaw) * 0.8, 5, 1.6, CY, 0.9, pl.cam.yaw); break;
-    case 'chord': pl.flash = 1; burst(pl, x + Math.cos(pl.cam.yaw), 1.3, z + Math.sin(pl.cam.yaw), 70, 9, CY, 0.8, pl.cam.yaw); break;
+    case 'hum': burst(pl, x + Math.cos(yaw) * 0.8, 1.2, z + Math.sin(yaw) * 0.8, 5, 1.6, CY, 0.9, yaw); break;
+    case 'chord': pl.flash = 1; burst(pl, x + Math.cos(yaw), 1.3, z + Math.sin(yaw), 70, 9, CY, 0.8, yaw); break;
     case 'hurt': G.input.rumble?.(0.7, 170); G.hurtFlash = 1; hud.pain(); burst(pl, x, 1.2, z, 14, 2, RED, 0.5); hud.alert('YOU ARE BEING UNWRITTEN', 1.2); break;
     case 'unwritten': burst(pl, x, 1.2, z, 90, 3, PALE, 1.4); hud.alert('UNWRITTEN', 1.2); break;
     case 'stagger': burst(pl, x, 1.4, z, 22, 2.5, PALE, 0.7); break;
@@ -334,14 +343,15 @@ function frameBody(t) {
   if (G.mode === 'play') {
     ticks = consumeTicks(G, elapsed, MAX_CATCHUP, S().speed || 1); // assist speed scales wall time only; each tick is unchanged
     for (let k = 0; k < ticks; k++) {
-      G.prev = snapshot(G.sim); const word = G.bot ? botInput(G.bot, G.sim) : G.input.poll();
+      G.prev = snapshot(G.sim); const word = G.bot ? botInput(G.bot, G.sim) : G.input.poll(G.sim.p.ang);
       if (G.log.length >= INPUT_CAP) { G.base = { tick: G.sim.tick, state: Array.from(serialize(G.sim)) }; G.log = []; } // re-base instead of truncating
       G.failingInput = word; step(G.sim, word); G.failingInput = null; G.log.push(word); /* the log holds completed ticks only */
       for (const e of G.sim.events) present(e); G.sim.events.length = 0; stepGhost(G.ghost);
     }
   }
   const simMs = performance.now() - simT0, alpha = G.mode === 'play' ? Math.min(1, G.acc / TICK) : 1, view = viewOf(G.prev, G.sim, alpha), p = G.sim.p;
-  if (G.mode === 'photo') { photoMove(elapsed); Object.assign(view, { x: G.photo.x, z: G.photo.z, y: G.photo.y, yaw: G.photo.yaw, fov: G.photo.fov, hold: 0 }); }
+  view.camera = G.mode === 'photo' ? 'first' : cameraMode(); // photo mode is always the free perspective camera
+  if (G.mode === 'photo') { if (cameraMode() !== 'first') view.player = { x: view.x, z: view.z, yaw: view.yaw, hold: view.hold }; /* the singer stays in the picture */ photoMove(elapsed); Object.assign(view, { x: G.photo.x, z: G.photo.z, y: G.photo.y, yaw: G.photo.yaw, fov: G.photo.fov, hold: 0 }); }
   if (G.ghost) view.ghost = ghostPose(G.ghost, alpha, U);
   G.bob += elapsed * (p.hold ? 4 : 9) * (ticks && (G.prev.p.x !== p.x || G.prev.p.z !== p.z) ? 1 : 0); view.bob = Math.sin(G.bob) * 1.6;
   const dt = G.mode === 'play' ? elapsed : 0; renderFrame(G.pl, view, dt);
@@ -351,7 +361,7 @@ function frameBody(t) {
   if (G.photoShot) { G.photoShot = false; savePhoto($('view')); } // read in the same task as the draw, while the WebGL buffer is valid
   if (S().debug) { const d = $('debug'), ctx = d.getContext('2d'), img = ctx.createImageData(G.pl.w, G.pl.h); debugImage(img.data, G.pl, S().debug); ctx.putImageData(img, 0, 0); }
   G.hud.update(G.sim, elapsed, S().captions); if (S().speedrun) updateTimer();
-  if (S().soundCaptions) { G.heartCue = (G.heartCue || 0) - elapsed; if (G.mode === 'play' && G.heartCue <= 0) { G.heartCue = 0.9; G.hud.sound(heartbeatCaption(G.sim)); } } G.hud.renderSounds(S().soundCaptions ? elapsed : 99); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead);
+  if (S().soundCaptions) { G.heartCue = (G.heartCue || 0) - elapsed; if (G.mode === 'play' && G.heartCue <= 0) { G.heartCue = 0.9; G.hud.sound(heartbeatCaption(G.sim, listenYaw())); } } G.hud.renderSounds(S().soundCaptions ? elapsed : 99); G.audio.update(G.sim, G.pl, elapsed, G.mode === 'play' && !G.sim.c.done && !G.sim.c.dead, listenYaw());
   // rolling statistics: G.frames is CPU work time for this frame, G.intervals the time between frames
   const total = performance.now() - simT0; G.frames.push(total);
   if (G.auto && G.mode === 'play') { const t2 = sampleFrame(G.auto, G.pl.remote ? G.pl.stats.ms.total || total : total); if (t2) setTier(t2); } /* a worker's cost is its own frame time */

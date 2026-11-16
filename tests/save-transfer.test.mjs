@@ -26,6 +26,8 @@ test('validation rejects out-of-range or mistyped fields before they reach the g
   assert.match(validateSave({ ...s, endings: [3] }).join(), /endings/);
   assert.match(validateSave({ ...s, best: { 10: 5 } }).join(), /best times/);
   assert.match(validateSave({ ...s, settings: { ...s.settings, volume: 'loud' } }).join(), /volume/);
+  assert.match(validateSave({ ...s, settings: { ...s.settings, camera: 'isometric' } }).join(), /camera/);
+  for (const camera of ['dimetric', 'first']) assert.deepEqual(validateSave({ ...s, settings: { ...s.settings, camera } }), [], `${camera} camera is a valid setting`);
   assert.match(validateSave({ ...s, checkpoint: { chapter: 2, state: [1, 2.5] } }).join(), /32-bit/);
   assert.match(validateSave({ ...s, checkpoint: { chapter: 40, state: [1] } }).join(), /out of range/);
   const forged = exportSave({ ...s, unlocked: 99 }); assert.throws(() => importSave(forged), /cannot be used: unlocked chapters must be 1-9/);
