@@ -14,7 +14,7 @@ export function createGBuffer(w, h) {
   const n = w * h;
   return {
     w, h, depth: new Float32Array(n), normal: new Int16Array(n * 2), tangent: new Int16Array(n * 2), radiance: new Float32Array(n * 3),
-    material: new Uint8Array(n), object: new Uint8Array(n), velocity: new Float32Array(n * 2), lum: new Float32Array(n),
+    material: new Uint8Array(n), object: new Uint8Array(n), velocity: new Float32Array(n * 2), lum: new Float32Array(n), nrm: new Float32Array(n * 3), // decoded normals, written once per frame by the lighting pass
     bytes: n * (4 + 4 + 4 + 12 + 1 + 1 + 8 + 4),
   };
 }

@@ -60,7 +60,7 @@ export function shade(gb, cam, env) {
         radiance[o] = r * exp; radiance[o + 1] = g * exp; radiance[o + 2] = b * exp; continue;
       }
       const a = (x + 0.5 - w / 2) / cam.f, wx = cam.x + (cam.fx + cam.rx * a) * d, wz = cam.z + (cam.fz + cam.rz * a) * d, wy = cam.y - vy * d;
-      octDecode(normal, i * 2, N);
+      octDecode(normal, i * 2, N); gb.nrm[o] = N[0]; gb.nrm[o + 1] = N[1]; gb.nrm[o + 2] = N[2];
       // procedural albedo detail: gives the shape matcher and structure tensor real surface structure
       let k = 1;
       if (m === 2) { // stone courses and joints

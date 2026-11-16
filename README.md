@@ -33,6 +33,7 @@ PLAYWRIGHT_PATH=/path/to/node_modules/playwright npm run check:browser
 | [docs/GDD.md](docs/GDD.md) | Game design document |
 | [docs/FEASIBILITY.md](docs/FEASIBILITY.md) | Stack decision, measured spike, risks |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Six-phase delivery plan and PR checkpoints |
+| [docs/TEST_REPORT.md](docs/TEST_REPORT.md) | Fixture results, pacing, benchmarks, compatibility |
 
 Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetric Codex, Edition II).
 
@@ -50,4 +51,4 @@ Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetri
 
 ## Status
 
-Phase 3b of 6 — Production, content-complete: audio, atmosphere, temporal and HUD polish.
+Phase 4 of 6 — Release Candidate 1. See [docs/TEST_REPORT.md](docs/TEST_REPORT.md) and [CHANGELOG.md](CHANGELOG.md).
