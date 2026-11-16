@@ -70,6 +70,7 @@ export function getMesh(name) {
     case 'marcher': figure(b, MAT.CLOTH, { height: 1.85, arm: 0.8, lean: 0.08, eye: MAT.CLOTH }); break;
     case 'chorister': figure(b, MAT.GLORY, { height: 2.6, arm: 1.4, lean: 0, eye: MAT.ARCANE }); b.tube(Array.from({ length: 9 }, (_, i) => [Math.cos(i / 8 * 6.283) * 0.42, 2.95, Math.sin(i / 8 * 6.283) * 0.42]), Array(9).fill(0.035), MAT.GLORY, 5); break;
     case 'comer': figure(b, MAT.GLORY, { height: 3.0, arm: 1.7, lean: -0.05, eye: MAT.GLORY, head: 0.22 }); break;
+    case 'ghost': figure(b, MAT.ARCANE, { height: 1.75, arm: 0.9, lean: 0.04, eye: MAT.ARCANE, head: 0.2 }); break; // the singer's own best run, in glyph-light
     case 'slumberer': b.tube([[-0.9, 0.2, 0], [0, 0.26, 0], [0.75, 0.22, 0]], [0.12, 0.24, 0.18], MAT.PALE, 8).sphere([0.98, 0.24, 0], [0.19, 0.17, 0.17], MAT.PALE, 10, 7).tube([[0.5, 0.25, 0.25], [0, 0.12, 0.42], [-0.4, 0.08, 0.36]], [0.06, 0.05, 0.03], MAT.PALE, 6); break;
     case 'measure': for (const [a, c] of [[[0, 0.55, 0], [0, -0.55, 0]], [[0.3, 0, 0], [-0.3, 0, 0]], [[0, 0, 0.3], [0, 0, -0.3]]]) b.tube([a, [0, 0, 0], c], [0.012, 0.11, 0.012], MAT.ARCANE, 5); break;
     case 'flame': b.tube([[0, 0, 0], [0.04, 0.3, 0.02], [-0.03, 0.62, -0.02], [0.02, 0.95, 0]], [0.2, 0.24, 0.13, 0.01], MAT.FLAME, 7); break;

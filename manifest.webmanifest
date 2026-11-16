@@ -1,0 +1,16 @@
+{
+  "name": "ODE — a horror in nine stanzas",
+  "short_name": "ODE",
+  "description": "A first-person horror game in volumetric ASCII, built on Arthur O'Shaughnessy's Ode.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#03050b",
+  "theme_color": "#03050b",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

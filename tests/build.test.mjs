@@ -19,7 +19,7 @@ test('production build: every shipped file is hashed, versions agree, rebuild is
 
 test('build import gate: every static import form is extracted, and a missing side-effect import fails', async () => {
   const { importSpecifiers, checkImports } = await import('../tools/lib/imports.mjs');
-  const src = `import a from './a.js';\nimport { b,\n  c as d } from "./b.js";\nimport * as e from './e.js';\nexport { f } from './f.js';\nexport * from './g.js';\nimport './side.js';\nimport'./tight.js';\nconst m = import('./lazy.js');\nconst u = import.meta.url; export const V = '1.0'; // important: not an import`;
+  const src = `import a from './a.js';\nimport { b,\n  c as d } from "./b.js";\nimport * as e from './e.js';\nexport { f } from './f.js';\nexport * from './g.js';\nimport './side.js';\nimport'./tight.js';\nconst m = import('./lazy.js');\nconst u = import.meta.url; export const V = '1.0'; // important: not an import\nconst label = { text: 'Check import', next: "export" };\n// import './commented.js';\n /* import './block.js' */\n *  import './jsdoc.js'`;
   assert.deepEqual(importSpecifiers(src), ['./a.js', './b.js', './e.js', './f.js', './g.js', './side.js', './tight.js', './lazy.js']);
   const files = ['src/game/main.js', 'src/game/hud.js'], read = f => (f.endsWith('main.js') ? "import './hud.js';\nimport './missing.js';\nimport x from 'bare';" : '');
   assert.deepEqual(checkImports(files, read), ['src/game/main.js: missing ./missing.js', 'src/game/main.js: bare import bare']);

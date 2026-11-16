@@ -1,5 +1,6 @@
 // Frame pipeline. Order is fixed by the guide: resolve continuous geometry -> transported light
 // and fog -> adaptive leaves -> surface flow -> glyph selection with temporal history -> output.
+import { createExposure, meter, adapt } from './exposure.js';
 import { createGBuffer, makeCamera, setCamera, copyCamera, traceWorld, rasterMesh, worldVelocity, CELL } from './gbuffer.js';
 import { createCascades, solveCascades, addEmitter, TEXELS_PER_CELL } from './cascades.js';
 import { shade, createFog, integrateFog, compositeFog, directionalShadow } from './light.js';
@@ -36,7 +37,7 @@ export function createPipeline(atlas, noise, quality = 'high') {
   const pl = {
     w, h, quality, atlas, noise, gb: createGBuffer(w, h), cam: makeCamera(w, h), prevCam: makeCamera(w, h), qt: createQuadtree(w, h, cap), flow: createFlow(w, h), fog: createFog(w, h, 4),
     sel: createSelector(w, h, cap, atlas, noise), trails: new DecayField(900), world: null, cascades: null, shadow: null, instances: new Map(), firstFrame: true, time: 0,
-    opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2 }, flash: 0, humLevel: 0,
+    opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2, autoExposure: false }, flash: 0, humLevel: 0, ae: createExposure(),
     stats: { ms: { gbuffer: 0, light: 0, fog: 0, tree: 0, flow: 0, select: 0, total: 0 }, tris: 0, cascade: null },
     env: null,
   };
@@ -55,6 +56,7 @@ export function shelterShadow(sim, out) {
 }
 
 export function setScene(pl, sim) {
+  pl.ae.snap = true;
   pl.world = buildWorld(sim); pl.cascades = createCascades(sim.w * TEXELS_PER_CELL, sim.h * TEXELS_PER_CELL);
   // static atmosphere: low mist banks over water, settling dust indoors (fog bodies in the heterogeneous field)
   // scan every eligible tile (water anywhere; open floor indoors) and keep blob centres at least MIST_GAP cells
@@ -83,7 +85,7 @@ export function setScene(pl, sim) {
  * resolution and starts fresh.
  */
 export function adoptScene(pl, from) {
-  for (const k of ['world', 'cascades', 'shadow', 'mist', 'time', 'humLevel', 'flash', 'trails', 'instances']) pl[k] = from[k];
+  for (const k of ['world', 'cascades', 'shadow', 'mist', 'time', 'humLevel', 'flash', 'trails', 'instances', 'ae']) pl[k] = from[k]; // the eye stays adapted across a tier change
   Object.assign(pl.opts, from.opts); pl.firstFrame = true;
   return pl;
 }
@@ -97,7 +99,8 @@ function instance(pl, key) { let i = pl.instances.get(key); if (!i) { i = { x: 0
 export function renderFrame(pl, view, dt) {
   const t0 = now(), { gb, cam, prevCam, world, cascades: c, fog, sim: _ } = pl, sim = view.sim, th = THEMES[sim.def.id], ms = pl.stats.ms;
   pl.time += pl.opts.reducedMotion ? 0 : dt; const time = pl.time;
-  copyCamera(prevCam, cam); setCamera(cam, view.x, 1.62 + (view.hold ? -0.25 : 0), view.z, view.yaw, pl.opts.reducedMotion ? 0 : view.bob || 0);
+  const fov = view.fov || 74; if (fov !== (pl.fov || 74)) { pl.fov = fov; cam.f = prevCam.f = (cam.w / 2) / Math.tan((fov * Math.PI) / 360); } // photo mode may change the field of view
+  copyCamera(prevCam, cam); setCamera(cam, view.x, view.y ?? 1.62 + (view.hold ? -0.25 : 0), view.z, view.yaw, pl.opts.reducedMotion ? 0 : view.bob || 0);
   if (pl.firstFrame) copyCamera(prevCam, cam);
   syncWorld(world, sim, dt);
   // ---- G-buffer ----
@@ -113,6 +116,7 @@ export function renderFrame(pl, view, dt) {
     const stag = e.mode === 8, husk = e.type === ET.HUSK && e.mode === 0;
     draw('e' + k, MESH_OF[e.type], e.x, husk ? 0.45 : 0, e.z, e.yaw, { sway: stag ? 0.09 : e.type === ET.SLUMBERER ? 0 : 0.028, phase: k * 1.7, squash: stag ? 0.86 : 1 });
   });
+  if (view.ghost && Math.hypot(view.ghost.x - cam.x, view.ghost.z - cam.z) > 1.2) draw('ghost', 'ghost', view.ghost.x, 0, view.ghost.z, view.ghost.yaw, { sway: 0.02, phase: 0.7 }); // ghost of the best run; hidden while it shares the player's space
   sim.picks.forEach((m, k) => { if (!m.taken) draw('m' + k, 'measure', m.x * UNIT_M, 1.25 + Math.sin(time * 1.3 + k) * 0.12, m.z * UNIT_M, time * 0.9 + k, { scale: 0.9 }); });
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) if (sim.tiles[z * sim.w + x] === 66 && sim.dyn[z * sim.w + x]) draw('b' + (z * sim.w + x), 'flame', (x + 0.5) * CELL, 0.9, (z + 0.5) * CELL, time * 0.6, { sway: 0.08, phase: x });
   if (th.body) draw('sky', th.body, cam.x + th.dir[0] * 320, cam.y + th.dir[1] * 320, cam.z + th.dir[2] * 320, 0, { scale: th.body === 'sun' ? 30 : 15 });
@@ -120,19 +124,23 @@ export function renderFrame(pl, view, dt) {
   pl.stats.tris = tris; const t1 = now(); ms.gbuffer = t1 - t0;
   // ---- transported light ----
   const T = TEXELS_PER_CELL, tm = CELL / T; c.emit.fill(0);
-  for (let z = 0; z < world.h; z++) for (let x = 0; x < world.w; x++) { const s = world.floorH[z * world.w + x] > 1.6 ? 1 : 0; for (let j = 0; j < T; j++) c.solid.fill(s, (z * T + j) * c.tw + x * T, (z * T + j) * c.tw + x * T + T); }
+  if (world.dirty || c.solidFor !== world) { // occupancy only changes with the world (walls rising, gates, phases)
+    for (let z = 0; z < world.h; z++) for (let x = 0; x < world.w; x++) { const s = world.floorH[z * world.w + x] > 1.6 ? 1 : 0; for (let j = 0; j < T; j++) c.solid.fill(s, (z * T + j) * c.tw + x * T, (z * T + j) * c.tw + x * T + T); }
+    c.solidFor = world;
+  }
   const p = sim.p; pl.humLevel += ((p.hum ? 1 : 0) - pl.humLevel) * Math.min(1, dt * 6); pl.flash *= Math.exp(-dt / 0.35);
   const hum = pl.humLevel * (1.5 + 0.35 * Math.sin(time * 9)) + pl.flash * 6;
   addEmitter(c, view.x, view.z, 1.2, [0.12 + 0.5 * hum, 0.14 + 1.3 * hum, 0.16 + 1.2 * hum], tm); // the singer always carries a faint presence
   if (p.flame) addEmitter(c, view.x + cam.fx * 0.6, view.z + cam.fz * 0.6, 1.0, [1.5, 0.66, 0.16].map(v => v * (0.85 + 0.15 * Math.sin(time * 11))), tm);
   for (const m of sim.picks) if (!m.taken) addEmitter(c, m.x * UNIT_M, m.z * UNIT_M, 0.9, [0.35, 1.05, 1.2], tm);
+  if (view.ghost) addEmitter(c, view.ghost.x, view.ghost.z, 0.8, [0.12, 0.4, 0.45], tm);
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) { const t = sim.tiles[z * sim.w + x], i = z * sim.w + x;
     if (t === 66 && sim.dyn[i]) for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) addEmitter(c, (x + 0.5 + ox * 0.75) * CELL, (z + 0.5 + oz * 0.75) * CELL, 0.8, [2.6, 1.2, 0.3], tm);
     if (t === 88 && sim.c.gateOpen) addEmitter(c, (x + 0.5) * CELL, (z + 0.5) * CELL, 1.2, [0.5, 1.5, 1.7], tm); }
   for (const e of view.ents) if ((e.type === ET.CHORISTER && sim.c.phase === 1) || e.type === ET.COMER) addEmitter(c, e.x, e.z, 1.1, [1.3, 1.1, 0.6], tm);
   const surge = sim.def.dawn ? (sim.c.stage === 2 ? 1 : sim.c.stage === 1 ? 0.35 : 0.08) : 0;
   const sky = th.skyHorizon.map((v, k) => v * 0.6 + th.ambient[k] + surge * [1.6, 1.0, 0.5][k]);
-  solveCascades(c, { sigma: th.fog * tm * pl.opts.fogScale, sky, bounces: pl.opts.bounces, albedo: 0.5, gain: 0.8 });
+  solveCascades(c, { sigma: th.fog * tm * pl.opts.fogScale, sky, bounces: pl.opts.bounces, albedo: 0.5, gain: 0.8, bilinearFix: pl.quality !== 'low' }); // low tier keeps the cheaper plain merge
   if (world.dirty) {
     if (sim.def.rule & RULE.DAWN) shelterShadow(sim, pl.shadow); // the shade drawn is exactly the shade that protects
     else if (th.dirColor[0] > 0) directionalShadow(world, th.dir, pl.shadow);
@@ -140,10 +148,12 @@ export function renderFrame(pl, view, dt) {
   }
   const apart = sim.def.glory && sim.c.phase === 1 ? 2.2 : 1, dirK = sim.def.dawn ? 0.25 + surge * 2.2 : 1;
   const lantern = { intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
-  const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure, stars: th.stars, dt };
+  const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure * (pl.opts.autoExposure ? pl.ae.ev : 1), stars: th.stars, dt };
   shade(gb, cam, env); const t2 = now(); ms.light = t2 - t1;
   fog.sigma = th.fog * pl.opts.fogScale * apart; fog.height = th.fogH; fog.ambient = th.fogAmb.map(v => v * (1 + surge * 3)); fog.blobs = pl.mist && pl.mist.length ? pl.mist.concat(blobs) : blobs.length ? blobs : null;
-  integrateFog(fog, gb, cam, env, pl.noise); compositeFog(fog, gb); const t3 = now(); ms.fog = t3 - t2;
+  integrateFog(fog, gb, cam, env, pl.noise); compositeFog(fog, gb);
+  if (pl.opts.autoExposure) { const avg = meter(pl.ae, gb.radiance, gb.w, gb.h, env.exposure); if (pl.ae.snap) { adapt(pl.ae, avg, 0); pl.ae.ev = pl.ae.target; pl.ae.snap = false; pl.ae.warm = 0.5; } else adapt(pl.ae, avg, dt); /* a new scene starts adapted */ pl.stats.exposure = pl.ae.ev; } // used from the next frame
+  const t3 = now(); ms.fog = t3 - t2;
   // ---- adaptive leaves, flow, glyphs ----
   subdivide(pl.qt, gb); const t4 = now(); ms.tree = t4 - t3;
   computeFlow(pl.flow, gb, cam, { noise: pl.noise, etfIterations: pl.opts.etfIterations }); const t5 = now(); ms.flow = t5 - t4;

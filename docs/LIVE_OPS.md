@@ -19,7 +19,7 @@ Opt-in, first-party, minimal. Implementation: `src/game/telemetry.js`.
 | `session_start` | `tier`, `reducedMotion`, `textScale` | Boot |
 | `chapter_start` | `chapter` | New chapter (not on restore) |
 | `chapter_complete` | `chapter`, `tick`, `hp` | Exit reached |
-| `death` | `chapter`, `tick`, `hp`, `measures` | Unwritten |
+| `death` | `chapter`, `tick`, `hp`, `measures`, `cx`, `cz` (map cell) | Unwritten |
 | `ending` | `ending` (1 sing, 2 silence) | Chapter 9 |
 | `perf` | `tier`; `cpuP50`, `cpuP95` (main-thread work per frame, ms); `intervalP50`, `intervalP95` (time between rendered frames, ms, which includes missed refreshes and GPU waits) | Each chapter completion |
 | `endless_verse` / `endless_end` | `seed`, `depth` | Endless Choir |
@@ -96,7 +96,9 @@ Players see the in-game update notice from `version.json` on their next visit; s
 | Version | Content | Status / hook |
 |---|---|---|
 | 1.1 | **Endless Choir**: procedurally generated verses from (seed, depth), three verse kinds borrowing campaign rules, escalating threats, one life, best-depth record, weekly shared seed | **Implemented** (`src/sim/endless.js`); unlocks after Chapter 8 or any ending; deterministic, replayable, tested |
-| 1.2 | Firefox/Safari certification; GPU-path timing on named hardware; Web Worker render to free the main thread | Planned |
-| 1.3 | **Epilogue — "A Singer Who Sings No More"**: a tenth stanza-less chapter after ending 2, using the Endless generator with a fixed seed and the Chapter 9 theme | Hook: `endlessVerse(seed, depth)` + `def.theme`; needs writing and a map |
-| 1.4 | Challenge modifiers for Endless (no hum, permanent dawn, double threats) | Hook: verse `KINDS` table and chapter `rule` flags |
-| Later | Community seeds (share a seed string), replays as ghost runs (input logs already deterministic) | Hook: RLE input logs and `replayReport` |
+| 1.2 | **Web Worker render**: the whole pipeline runs in a module worker; the main thread keeps simulation, input, audio, HUD and the GL draw (main-thread frame CPU 36.6 ms → 0.2 ms; rendered fps +26 % on 4 vCPU software GL); output byte-identical to in-thread rendering | **Implemented** (`src/render/worker.js`, `src/render/client.js`; Settings → Render thread, default worker) |
+| 1.2 (rest) | Firefox/Safari certification; GPU-path timing on named hardware | Planned |
+| 1.3 | **Epilogue — "A Singer Who Sings No More"**: a tenth stanza-less chapter after ending 2, using the Endless generator with a fixed seed and the Chapter 9 theme | **Implemented** (`src/sim/epilogue.js`): seed 1873, verse 11 (three husks and the Three-in-One), no voice at all, stealth to the shore; opening and closing text written; unlocked by ending 2 |
+| 1.4 | Challenge modifiers for Endless: **Silent Choir** (no voice), **Permanent Dawn** (sun surges in every verse), **Twice the Choir** (double threats); best depth kept per combination | **Implemented** (`MOD` in `src/sim/endless.js`, `RULE.SILENT`); recorded in crash reports and replayed; modifier-free verses are byte-identical to 1.1 |
+| 1.1.x | **Community seeds**: every Endless run has a 9-symbol code (`0037-JCG0-0`, Crockford base32 + mod-37 check) shown in the HUD and on the end screen, copyable, enterable from the Endless menu or as `?seed=CODE` | **Implemented** (`src/sim/seedcode.js`); every single-symbol typo and adjacent swap is rejected |
+| Later | Replays as ghost runs (input logs already deterministic) | Hook: RLE input logs and `replayReport` |

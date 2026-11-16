@@ -1,11 +1,13 @@
 // Player HUD and menus (guide phase 6, task 5-2). DOM text above the glyph field: every state is
 // carried by a label and a shape as well as colour, everything is keyboard reachable, and the
 // critical meters stay visible regardless of what the renderer is doing.
+import { encodeSeed } from '../sim/seedcode.js';
+import { createCaptionStack } from './soundcaptions.js';
 import { TUNE, ET } from '../sim/sim.js';
+import { html, isSafeHTML, markup, setHTML } from './safe-html.js';
 
 const $ = id => document.getElementById(id);
 const NAMES = { [ET.FORSAKER]: 'FORSAKER', [ET.CROWNED]: 'THE CROWNED', [ET.TRAMPLER]: 'TRAMPLER', [ET.SIGH]: 'A SIGH', [ET.MIRTH]: 'MIRTH', [ET.TRIUNE]: 'THE THREE-IN-ONE', [ET.HUSK]: 'HUSK', [ET.BUILDER]: 'BLIND BUILDER', [ET.MARCHER]: 'THE MULTITUDE', [ET.CHORISTER]: 'CHORISTER', [ET.COMER]: 'A COMER', [ET.SLUMBERER]: 'THE SLUMBERER' };
-const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function createHud() {
   const hud = { captionQueue: [], captionTimer: 0, alertTimer: 0, last: {} };
@@ -13,9 +15,14 @@ export function createHud() {
   const bar = (id, pct) => set($(id), id, Math.round(pct), (el, v) => { el.firstElementChild.style.width = v + '%'; el.setAttribute('aria-valuenow', v); });
 
   hud.show = on => { $('hud').hidden = !on; };
-  hud.setChapter = (def, total, endless = null) => { $('chapterKicker').textContent = endless ? `ENDLESS CHOIR · SEED ${endless.seed} · VERSE ${endless.depth}` : `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
+  hud.setChapter = (def, total, endless = null) => { $('chapterKicker').textContent = def.epilogue ? 'EPILOGUE · A VERSE WITHOUT A STANZA' : endless ? `ENDLESS CHOIR · ${encodeSeed(endless.seed)} · VERSE ${endless.depth}` : `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
   hud.caption = (lines, seconds = 3.2) => { for (const l of [].concat(lines)) hud.captionQueue.push([l, seconds]); };
   hud.pain = () => { hud.hurt = 0.8; };
+  // directional sound captions: a polite live region, re-rendered only when its text changes
+  const sc = document.createElement('div'); sc.id = 'soundcap'; sc.setAttribute('aria-live', 'polite'); sc.setAttribute('aria-label', 'Sound captions'); $('hud')?.querySelector('.hud-top')?.after(sc); // in flow under the top panels: never on top of them
+  hud.sounds = createCaptionStack(); let scText = '';
+  hud.sound = c => hud.sounds.push(c);
+  hud.renderSounds = dt => { hud.sounds.tick(dt); const t = hud.sounds.lines().join('\n'); if (t !== scText) { scText = t; sc.textContent = t; } };
   hud.alert = (text, seconds = 2.4) => { $('alert').textContent = text; hud.alertTimer = seconds; };
 
   hud.update = (sim, dt, captions = true) => {
@@ -36,7 +43,7 @@ export function createHud() {
     if (def.rule & 4) tags.push(['warn', c.phase ? '◐ BABEL · BEING BORN' : '◑ NINEVEH · DYING']); if (def.rule & 64) tags.push(['warn', c.phase ? '◈ APART' : '◇ AMONG']);
     if (def.rule & 128) tags.push(c.stage === 2 ? ['bad', '☀ THE DAWN — SHADOW!'] : c.stage === 1 ? ['warn', '☼ THE CRY GOES UP'] : ['good', '☾ CALM']);
     if (!voiced) tags.push(['warn', '∅ VOICELESS']);
-    set($('tags'), 'tags', tags.map(t => t[1]).join('|'), el => { el.innerHTML = tags.map(([k, t]) => `<span class="tag ${k}">${esc(t)}</span>`).join(''); });
+    set($('tags'), 'tags', tags.map(t => t[1]).join('|'), el => { el.replaceChildren(...tags.map(([k, t]) => { const s = document.createElement('span'); s.className = 'tag ' + k; s.textContent = t; return s; })); });
     // nearest threat: always-visible proximity meter with a name
     let best = null, bd = 1e9; for (const e of sim.ents) { if (e.mode === 9 || (e.type === ET.HUSK && e.mode === 0) || (e.type === ET.MARCHER && !p.marked) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && c.phase !== 1)) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < bd) { bd = d; best = e; } }
     const show = !!best && bd < 12 * 1024; set($('threatPanel'), 'thr', show, (el, v) => { el.hidden = !v; });
@@ -63,16 +70,18 @@ export function createHud() {
     else if (hud.captionQueue.length && captions) { const [text, secs] = hud.captionQueue.shift(); $('caption').textContent = text; hud.captionTimer = secs; }
   };
 
-  /** Modal menu. items: [{label, action, primary, disabled}] ; body: html string. Focus is trapped while open. */
+  /** Modal menu. items: [{label, action, primary, disabled}]; body: html`` output (a plain string is treated as markup()
+   *  and still validated by the ode-html policy). Focus is trapped while open. */
   hud.menu = (title, body, items, kicker = '') => {
     const m = $('menu'); m.hidden = false;
-    m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="menuTitle">${kicker ? `<h2>${esc(kicker)}</h2>` : ''}<h1 id="menuTitle">${esc(title)}</h1>${body || ''}<nav>${items.map((it, i) => `<button data-i="${i}" class="${it.primary ? 'primary' : ''}" ${it.disabled ? 'disabled' : ''}>${esc(it.label)}</button>`).join('')}</nav></div>`;
+    const content = isSafeHTML(body) ? body : markup(body);
+    setHTML(m, html`<div class="card" role="dialog" aria-modal="true" aria-labelledby="menuTitle">${kicker && html`<h2>${kicker}</h2>`}<h1 id="menuTitle">${title}</h1>${content}<nav>${items.map((it, i) => html`<button data-i="${i}" class="${it.primary ? 'primary' : ''}" ${it.disabled ? html`disabled` : ''}>${it.label}</button>`)}</nav></div>`);
     m.onclick = e => { const b = e.target.closest('button[data-i]'); if (b && !b.disabled) items[+b.dataset.i].action(); };
     m.onkeydown = e => { if (e.key !== 'Tab') return; const f = [...m.querySelectorAll('button:not([disabled]),select,input,textarea')]; if (!f.length) return; const first = f[0], last = f[f.length - 1]; if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); } else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); } };
     (m.querySelector('button.primary:not([disabled])') || m.querySelector('button:not([disabled])'))?.focus();
     return m;
   };
-  hud.closeMenu = () => { const m = $('menu'); m.hidden = true; m.innerHTML = ''; };
+  hud.closeMenu = () => { const m = $('menu'); m.hidden = true; m.replaceChildren(); };
   hud.menuOpen = () => !$('menu').hidden;
   return hud;
 }

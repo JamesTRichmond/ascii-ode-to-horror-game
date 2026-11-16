@@ -9,17 +9,36 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
+    # The simulation is integer-only and must hash identically on every supported runtime: the same suite (including
+    # the golden hashes in tests/determinism-golden.test.mjs and tests/regressions/) runs on each Node line.
+    name: test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install dev dependencies (test tooling only; the game ships none)
+        run: npm ci --ignore-scripts
+      - name: Acceptance fixtures and game tests
+        run: npm test
+      - name: Production build (no pack)
+        run: node tools/build.mjs --no-pack
+  atlas:
+    name: atlas is reproducible from source
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
-      - name: Acceptance fixtures and game tests
-        run: npm test
-      - name: Production build (no pack)
-        run: node tools/build.mjs --no-pack
       - name: Atlas is reproducible from source
         env:
           # sha256 of the DejaVuSansMono.ttf the committed atlas was baked from (fonts-dejavu-core 2.37-8)

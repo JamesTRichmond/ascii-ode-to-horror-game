@@ -12,7 +12,7 @@ const SOURCE_VERSION = root === repo ? (pkg => JSON.stringify({ name: pkg.name, 
 let PROD_HEADERS = {};
 try { const v = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'vercel.json'), 'utf8')); for (const h of v.headers?.[0]?.headers || []) PROD_HEADERS[h.key] = h.value; } catch { /* no vercel.json */ }
 delete PROD_HEADERS['Cache-Control'];
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.bin': 'application/octet-stream', '.svg': 'image/svg+xml' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.bin': 'application/octet-stream', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 http.createServer((req, res) => {
   let rel; try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400).end(); return; }
   const file = path.join(root, rel.endsWith('/') ? rel + 'index.html' : rel), inside = path.relative(root, file);

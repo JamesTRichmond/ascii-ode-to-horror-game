@@ -3,7 +3,7 @@
 // relaxed weights never change the assignment. What it reports is how the annealed softmax distribution
 // over the leaf's dictionary collapses onto that export: entropy, and the gap between the export and the
 // distribution's expected coverage and descriptor. Guide task 3-3 itself — optimising hero assets offline
-// through a differentiable rasteriser against the source image — is NOT implemented.
+// through a differentiable rasteriser against the source image — is implemented in heroopt.js.
 import { MATERIALS } from '../shared/materials.js';
 import { shapeError } from './select.js';
 import { fnv1a } from '../sim/fixed.js';
