@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0-rc.2 — Phase 5 (Launch & Release)
+
+### Added
+- `tools/build.mjs`: reproducible production build with import/asset resolution gate, `version.json` file hashes and a release archive.
+- CI workflow (tests, build, atlas reproducibility); tag/manual-only release workflow (draft GitHub release, optional Pages deploy); `vercel.json` with security headers and auto-deploy of `main` disabled.
+- In-game update notice from `version.json`.
+- Dev server sends the production headers (CSP) so local play matches deployment.
+- Release notes, store copy, engine-rendered key art and screenshots, deploy guide, launch checklist.
+
 ## Review fixes (PR 3, Copilot) — carried into 1.0.0-rc.1
 
 ### Fixed

@@ -12,6 +12,12 @@ npm start
 Then open `http://localhost:8080/`. No dependencies to install; Node 20+ is only needed for the
 local file server, the tests and the atlas baker.
 
+## Build
+
+```bash
+npm run build
+```
+
 ## Test
 
 ```bash
@@ -34,6 +40,10 @@ PLAYWRIGHT_PATH=/path/to/node_modules/playwright npm run check:browser
 | [docs/FEASIBILITY.md](docs/FEASIBILITY.md) | Stack decision, measured spike, risks |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Six-phase delivery plan and PR checkpoints |
 | [docs/TEST_REPORT.md](docs/TEST_REPORT.md) | Fixture results, pacing, benchmarks, compatibility |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Build, preview and deployment targets |
+| [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md) | Launch checklist with status |
+| [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) | Player-facing release notes |
+| [store/STORE_PAGE.md](store/STORE_PAGE.md) | Store copy and engine-rendered art |
 
 Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetric Codex, Edition II).
 
@@ -51,4 +61,4 @@ Rendering specification: `nocturne-build-guide.html` (Nocturne — The Volumetri
 
 ## Status
 
-Phase 4 of 6 — Release Candidate 1. See [docs/TEST_REPORT.md](docs/TEST_REPORT.md) and [CHANGELOG.md](CHANGELOG.md).
+Phase 5 of 6 — Launch & Release: production build, deployment configuration, release materials. See [docs/DEPLOY.md](docs/DEPLOY.md) and [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md).

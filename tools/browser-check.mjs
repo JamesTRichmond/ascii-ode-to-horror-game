@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Browser acceptance checks (needs a local Playwright + Chromium; not a project dependency).
-// Usage: node tools/browser-check.mjs [--out dir] [--seconds 6] [--quality medium] [--gpu]
+// Usage: node tools/browser-check.mjs [--dir dist] [--out dir] [--seconds 6] [--quality auto] [--gpu]
 // Starts the static server itself, then reports JSON:
 //   chapters  every chapter loads in play mode with zero console errors; frame p50/p95
 //   ui        title -> begin -> pause (Esc) -> settings -> resume, keyboard focus trap, audio running
@@ -13,11 +13,11 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] ?? true : d; };
-const out = arg('out', null), seconds = +arg('seconds', 6), quality = arg('quality', 'auto'), port = 8000 + (process.pid % 900);
+const out = arg('out', null), serveDir = path.resolve(root, arg('dir', '.')), seconds = +arg('seconds', 6), quality = arg('quality', 'auto'), port = 8000 + (process.pid % 900);
 let chromium;
 try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_PATH || 'playwright').chromium; }
 catch { console.error('Playwright is not installed. Set PLAYWRIGHT_PATH to its package directory, or install it globally.'); process.exit(2); }
-const server = spawn(process.execPath, [path.join(root, 'tools/serve.mjs'), String(port), root], { stdio: 'ignore' });
+const server = spawn(process.execPath, [path.join(root, 'tools/serve.mjs'), String(port), serveDir], { stdio: 'ignore' });
 await new Promise(r => setTimeout(r, 600));
 const args = arg('gpu', false) ? [] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 let browser;

@@ -1,8 +1,7 @@
 name: CI
 on:
   pull_request:
-  push:
-    branches-ignore: [main]
+  push: # every branch, main included; CI never deploys
 permissions:
   contents: read
 concurrency:
@@ -19,3 +18,18 @@ jobs:
           node-version: 22
       - name: Acceptance fixtures and game tests
         run: npm test
+      - name: Production build (no pack)
+        run: node tools/build.mjs --no-pack
+      - name: Atlas is reproducible from source
+        env:
+          # sha256 of the DejaVuSansMono.ttf the committed atlas was baked from (fonts-dejavu-core 2.37-8)
+          ATLAS_FONT_SHA256: c805f9436dbc268644c1d9584f01a601a653e028e08fd74b9b949f6cf8304d88
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+          font=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
+          if [ "$(sha256sum "$font" | cut -d' ' -f1)" != "$ATLAS_FONT_SHA256" ]; then
+            echo "::warning::runner font differs from the one the atlas was baked from; reproducibility check skipped"
+            exit 0
+          fi
+          node tools/bake-atlas.mjs "$font"
+          git diff --exit-code -- assets/atlas
