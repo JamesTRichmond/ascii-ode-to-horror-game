@@ -1,7 +1,7 @@
 // Persistence. Settings and progress in localStorage; mid-chapter saves hold the canonical
 // integer simulation state, so loading preserves the next random draw.
 const KEY = 'ode.save.v1';
-export const DEFAULT_SETTINGS = { quality: 'auto', reducedMotion: false, textScale: 1, contrast: false, volume: 0.7, sensitivity: 1, stats: false, debug: '', captions: true, telemetry: false, vibration: true };
+export const DEFAULT_SETTINGS = { quality: 'auto', reducedMotion: false, textScale: 1, contrast: false, volume: 0.7, sensitivity: 1, stats: false, debug: '', captions: true, telemetry: false, vibration: true, bindings: null };
 
 export function loadSave() {
   const base = { version: 1, unlocked: 1, settings: { ...DEFAULT_SETTINGS }, checkpoint: null, endings: [], best: {} };
