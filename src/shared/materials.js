@@ -49,6 +49,7 @@ export const MATERIALS = [
   M(13, 'inscription', DICT.ARCANE, [0.7, 0.9, 0.85], [0.12, 0.3, 0.3], 0.8, { wShape: 0.2, wOrient: 0, jitter: 0.02 }),
   M(14, 'glory', DICT.ARCANE | DICT.EMBER, [1, 0.95, 0.8], [1.5, 1.3, 0.8], 1.0, { wShape: 0.3, wOrient: 0.4, jitter: 0.3 }),
   M(15, 'flame', DICT.EMBER, [1, 0.6, 0.2], [2.4, 1.1, 0.25], 1.0, { wShape: 0.2, wOrient: 0.3, warp: 0, jitter: 0.5 }),
+  M(16, 'singer', DICT.CLOTH | DICT.PALE, [0.62, 0.7, 0.78], [0.14, 0.2, 0.28], 1.0, { wShape: 0.7, wOrient: 0.7, jitter: 0.15 }), // the player, seen from the dimetric camera
 ];
 export const MAT = Object.fromEntries(MATERIALS.map(m => [m.name.toUpperCase(), m.id]));
 

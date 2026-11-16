@@ -7,7 +7,7 @@ import { FAR } from './gbuffer.js';
 export const CEILING = 3.4, WALL_OUT = 4.6;
 
 export function buildWorld(sim) {
-  const n = sim.w * sim.h, world = { w: sim.w, h: sim.h, floorH: new Float32Array(n), ceilH: new Float32Array(n).fill(FAR), floorMat: new Uint8Array(n), wallMat: new Uint8Array(n), ceilMat: new Uint8Array(n), target: new Float32Array(n), dirty: true, indoor: !!sim.def.indoor };
+  const n = sim.w * sim.h, world = { w: sim.w, h: sim.h, floorH: new Float32Array(n), ceilH: new Float32Array(n).fill(FAR), floorMat: new Uint8Array(n), wallMat: new Uint8Array(n), ceilMat: new Uint8Array(n), topMat: new Uint8Array(n), target: new Float32Array(n), dirty: true, indoor: !!sim.def.indoor };
   syncWorld(world, sim, 1e3);
   return world;
 }
@@ -36,6 +36,7 @@ export function syncWorld(world, sim, dt) {
     }
     if (t === TILE.FLOOR && !indoor) fm = MAT.STONE;
     world.target[i] = fh; world.floorMat[i] = fm; world.wallMat[i] = wm; world.ceilMat[i] = cm; world.ceilH[i] = ch;
+    world.topMat[i] = fh > 1 ? (t === TILE.TREE && !indoor ? MAT.GRASS : wm) : fm; // the upper face seen from above: canopy over a trunk, otherwise the wall's own stone
     const cur = world.floorH[i];
     if (cur !== fh) {
       const stepH = dt * 5.5, next = Math.abs(fh - cur) <= stepH ? fh : cur + Math.sign(fh - cur) * stepH;

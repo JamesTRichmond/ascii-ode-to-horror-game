@@ -18,7 +18,7 @@ const handle = msg => {
       for (const b of msg.bursts || []) burst(pl, ...b);
       renderFrame(pl, { ...msg.view, sim }, msg.dt);
       const n = pl.sel.count * 11, inst = pl.sel.inst.slice(0, n); // INSTANCE_FLOATS = 11
-      post({ type: 'frame', id: msg.id, inst, count: pl.sel.count, w: pl.w, h: pl.h, quality: pl.quality, stats: { ms: { ...pl.stats.ms }, tris: pl.stats.tris, cascade: pl.stats.cascade, exposure: pl.stats.exposure, qt: { ...pl.qt.stats, byLevel: [...pl.qt.stats.byLevel] }, sel: { ...pl.sel.stats } } }, [inst.buffer]);
+      post({ type: 'frame', id: msg.id, inst, count: pl.sel.count, w: pl.w, h: pl.h, quality: pl.quality, stats: { ms: { ...pl.stats.ms }, tris: pl.stats.tris, player: pl.stats.player, cascade: pl.stats.cascade, exposure: pl.stats.exposure, qt: { ...pl.qt.stats, byLevel: [...pl.qt.stats.byLevel] }, sel: { ...pl.sel.stats } } }, [inst.buffer]);
     }
   } catch (e) { post({ type: 'error', message: String(e?.message || e), stack: String(e?.stack || '') }); }
 };

@@ -7,17 +7,19 @@ const WHO = { [ET.FORSAKER]: 'a Forsaker', [ET.CROWNED]: 'the Crowned', [ET.TRAM
 const CRY = { [ET.FORSAKER]: 'shrieks', [ET.CROWNED]: 'bellows', [ET.TRAMPLER]: 'snorts', [ET.SIGH]: 'breathes in', [ET.MIRTH]: 'laughs', [ET.TRIUNE]: 'inhales', [ET.HUSK]: 'creaks', [ET.BUILDER]: 'grinds its teeth', [ET.MARCHER]: 'turn as one', [ET.CHORISTER]: 'sings out', [ET.COMER]: 'calls', [ET.SLUMBERER]: 'murmurs' };
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'], WORDS = ['ahead', 'ahead right', 'right', 'behind right', 'behind', 'behind left', 'left', 'ahead left'];
 
-/** Bearing of a world point from the player: degrees clockwise from straight ahead (-180..180], and distance in cells. */
-export function bearing(p, x, z) {
-  const th = (p.ang / 4096) * Math.PI * 2, dx = x - p.x, dz = z - p.z, fwd = dx * Math.cos(th) + dz * Math.sin(th), right = -dx * Math.sin(th) + dz * Math.cos(th);
+/** Bearing of a world point from the player: degrees clockwise from straight ahead (-180..180], and distance in cells.
+ *  "Ahead" is the player's facing, or `yaw` (radians) when given: the dimetric camera passes its azimuth so that the
+ *  arrows match the screen. */
+export function bearing(p, x, z, yaw = (p.ang / 4096) * Math.PI * 2) {
+  const th = yaw, dx = x - p.x, dz = z - p.z, fwd = dx * Math.cos(th) + dz * Math.sin(th), right = -dx * Math.sin(th) + dz * Math.cos(th);
   return { deg: (Math.atan2(right, fwd) * 180) / Math.PI, cells: Math.hypot(dx, dz) / 1024 };
 }
 export function direction(deg) { const i = ((Math.round(deg / 45) % 8) + 8) % 8; return { arrow: ARROWS[i], word: WORDS[i] }; }
 const band = cells => (cells < 4 ? 'near' : cells < 9 ? 'close' : 'far');
 
 /** @returns {text, arrow, key} for a simulation event, or null when the event makes no sound worth captioning. */
-export function captionFor(e, p) {
-  const at = () => { const b = bearing(p, e.x, e.z), d = direction(b.deg); return { arrow: d.arrow, where: `${d.word}, ${band(b.cells)}` }; };
+export function captionFor(e, p, yaw) {
+  const at = () => { const b = bearing(p, e.x, e.z, yaw), d = direction(b.deg); return { arrow: d.arrow, where: `${d.word}, ${band(b.cells)}` }; };
   const placed = (text, key) => { const a = at(); return { text: `${text} — ${a.where}`, arrow: a.arrow, key }; };
   const flat = (text, key = text) => ({ text, arrow: '•', key });
   switch (e.type) {
@@ -47,14 +49,14 @@ export function captionFor(e, p) {
 const cap = s => s[0].toUpperCase() + s.slice(1);
 
 /** The heartbeat the audio plays: same threat rules as audio.js. @returns null when calm, else a caption for it. */
-export function heartbeatCaption(sim) {
+export function heartbeatCaption(sim, yaw) {
   const p = sim.p; let near = 1e9, src = null;
   for (const e of sim.ents) {
     if (e.mode === 9 || e.type === ET.SLUMBERER || (e.type === ET.MARCHER && !p.marked) || (e.type === ET.HUSK && e.mode === 0) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && sim.c.phase !== 1)) continue;
     const d = Math.hypot(e.x - p.x, e.z - p.z) / 1024; if (d < near) { near = d; src = e; }
   }
   const fear = Math.max(0, Math.min(1, 1 - near / 7)); if (fear < 0.35 || !src) return null;
-  const d = direction(bearing(p, src.x, src.z).deg);
+  const d = direction(bearing(p, src.x, src.z, yaw).deg);
   return { text: `Your heart ${fear > 0.75 ? 'pounds' : 'races'} — ${cap(WHO[src.type] || 'something')} ${d.word}`, arrow: d.arrow, key: 'heart' };
 }
 

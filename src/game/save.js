@@ -1,7 +1,7 @@
 // Persistence. Settings and progress in localStorage; mid-chapter saves hold the canonical
 // integer simulation state, so loading preserves the next random draw.
 const KEY = 'ode.save.v1';
-export const DEFAULT_SETTINGS = { quality: 'auto', reducedMotion: false, textScale: 1, contrast: false, volume: 0.7, sensitivity: 1, stats: false, debug: '', captions: true, telemetry: false, renderThread: 'worker', vibration: true, bindings: null, soundCaptions: false, cvd: 'off', speed: 1, toggleVoice: false, spatial: 'binaural', eyeAdaptation: true };
+export const DEFAULT_SETTINGS = { quality: 'auto', reducedMotion: false, textScale: 1, contrast: false, volume: 0.7, sensitivity: 1, stats: false, debug: '', captions: true, telemetry: false, renderThread: 'worker', vibration: true, bindings: null, soundCaptions: false, cvd: 'off', speed: 1, toggleVoice: false, spatial: 'binaural', eyeAdaptation: true, camera: 'dimetric' };
 
 export function loadSave() {
   const base = { version: 1, unlocked: 1, settings: { ...DEFAULT_SETTINGS }, checkpoint: null, endings: [], best: {} };
@@ -17,7 +17,7 @@ export function clearSave() { try { localStorage.removeItem(KEY); } catch { /* s
 // ---------------------------------------------------------------- transfer between browsers and devices
 // A save code is "ODE1.<base64url JSON>.<FNV-1a 32 of the rest>". The checksum catches truncation and copy errors;
 // it is not anti-tamper (a single-player save has nothing to protect). Import validates every field before use.
-const MAGIC = 'ODE1', CHAPTER_COUNT = 9, QUALITIES = ['auto', 'low', 'medium', 'high'];
+const MAGIC = 'ODE1', CHAPTER_COUNT = 9, QUALITIES = ['auto', 'low', 'medium', 'high'], CAMERAS = ['dimetric', 'first'];
 const fnv32 = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0'); };
 const toB64url = str => { const b = new TextEncoder().encode(str); let bin = ''; for (const x of b) bin += String.fromCharCode(x); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const fromB64url = s => { const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))); };
@@ -37,6 +37,7 @@ export function validateSave(s) {
     if (!s.settings || typeof s.settings !== 'object') bad.push('settings must be an object');
     else for (const [k, v] of Object.entries(s.settings)) if (k in DEFAULT_SETTINGS && typeof v !== typeof DEFAULT_SETTINGS[k]) bad.push(`setting ${k} has the wrong type`);
     if (s.settings?.quality !== undefined && !QUALITIES.includes(s.settings.quality)) bad.push('unknown render quality');
+    if (s.settings?.camera !== undefined && !CAMERAS.includes(s.settings.camera)) bad.push('unknown camera mode');
   }
   const cp = s.checkpoint;
   if (cp !== null && cp !== undefined) {

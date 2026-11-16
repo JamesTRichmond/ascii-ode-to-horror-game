@@ -8,7 +8,7 @@ the stanza map and `nocturne-build-guide.html` holds the rendering specification
 | Field | Value |
 |---|---|
 | Title | ODE — a horror in nine stanzas |
-| Genre | First-person stealth horror with a voice mechanic |
+| Genre | Stealth horror with a voice mechanic, seen from a fixed-angle overhead (dimetric) camera; first person is a selectable option |
 | Platform | Desktop browser (WebGL2; CPU compositor fallback) |
 | Players | 1 |
 | Structure | 9 linear chapters, one per stanza of O'Shaughnessy's *Ode*; two endings |
@@ -32,7 +32,7 @@ the stanza map and `nocturne-build-guide.html` holds the rendering specification
 
 | Verb | Input | Cost | Effect | Noise radius (cells) |
 |---|---|---|---|---|
-| Walk | `W A S D` | — | Move | 5 |
+| Walk | `W A S D` (screen directions under the dimetric camera; forward/strafe in first person) | — | Move; the singer turns to face the way they walk | 5 |
 | Stand | — | — | — | 2 |
 | Hold breath | `Shift` (hold) | 1 Breath/tick, no regeneration | Slow, silent | 1 moving, 0 still |
 | Hum | `Space` (hold) | 2 Breath/tick | Emits light into the radiance cascades; drives chapter rules | 11 |
@@ -99,6 +99,7 @@ wall that the simulation raises is the same wall the tracer draws and the cascad
 | 4 Shape and flow | Staggered descriptor matching per material dictionary; structure tensor → sign-aligned ETF → LIC; SVD-clamped projection Jacobian per glyph | `select.js`, `flow.js` |
 | 5 Temporal | Velocity reprojection of descriptor history with object/material/depth/normal/level rejection; score-space hysteresis; object-motion stroke bias; continuous-time decay trails | `select.js`, `temporal.js` |
 | 6 Output | One instanced WebGL2 draw; CPU reference compositor; dirty-run text grid; fixed-timestep loop; DOM HUD | `output_gl.js`, `output_cpu.js`, `output_2d.js`, `src/game/*` |
+| Camera | One interface (`project`, `unproject`, `ray`, `pixelScale`, `forward`) with two implementations. **Dimetric** (default): orthographic, 45° azimuth, 30° elevation so tile edges run 2:1 on screen; follows the singer with light smoothing (none under reduced motion); ortho scale per quality tier; the world is a per-column parallel-ray grid march, ceilings are not drawn, and geometry near the singer along the view is cut away above 0.6 m (`occlusionMode = 'cutaway'`). **First person**: the original yaw-only pinhole camera at the singer's eye | `camera.js`, `gbuffer.js`, `pipeline.js` |
 
 ### 6.1 Material alphabets
 
@@ -119,7 +120,7 @@ Shape matching is weighted by local contrast: where a leaf has no internal struc
 | Source | Model |
 |---|---|
 | Moon / sun / dawn | Directional light with plan-view height-field shadows |
-| The singer's presence | Camera-attached point light (shadow-free by construction) plus a cascade emitter; brightens while humming; warm while carrying the Chapter 5 flame |
+| The singer's presence | Point light carried by the singer (at the camera's eye in first person; shadow-free by construction) plus a cascade emitter; brightens while humming; warm while carrying the Chapter 5 flame |
 | Hum, measures, braziers, open gates, Choristers, Comers | Emitters injected into the radiance cascades (light walls, fog and bounce) |
 | Inscriptions | Emissive script bands on dark stone |
 
@@ -147,7 +148,7 @@ Fully synthesised in WebAudio; no samples. Audio is presentation only and never 
 | Chapter beds | Per-chapter drone chord, filtered noise and LFO; surf swells on the shore chapters (1, 9); marching pulse in Chapter 6 |
 | The hum | G3 + D4 fifth through a formant band-pass; detunes flat when Breath is low; muted while holding breath |
 | Heartbeat | Rate and level follow the nearest active threat within 7 cells |
-| Spatial cues | Threat voices, hurts, walls, braziers and unwritings are stereo-panned and distance-attenuated from the listener's heading |
+| Spatial cues | Threat voices, hurts, walls, braziers and unwritings are stereo-panned and distance-attenuated from the listener's heading: the screen's up direction under the dimetric camera (so screen-left is heard on the left and caption arrows match the screen), the singer's facing in first person |
 | Stingers | Measures (pentatonic, one more note per measure), gate, phase turn, dawn cry, marking, gasp, endings |
 
 ## 9. Persistence

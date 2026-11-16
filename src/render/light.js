@@ -3,6 +3,7 @@
 // irradiance from the radiance cascades, emissive materials, then heterogeneous fog.
 import { MATERIALS } from '../shared/materials.js';
 import { FAR, CELL, octDecode } from './gbuffer.js';
+import { ray, skyCoords } from './camera.js';
 import { TEXELS_PER_CELL } from './cascades.js';
 
 const ALB = MATERIALS.map(m => m.albedo), EMI = MATERIALS.map(m => m.emissive);
@@ -45,21 +46,21 @@ export function probeIrradiance(c, xm, zm, nx, ny, nz, out) {
  * env: {ambient, skyTop, skyHorizon, dir:{d:[x,y,z], color}, shadow:Uint8 texel mask, cascades, time, exposure, stars}
  */
 export function shade(gb, cam, env) {
-  const { w, h, depth, normal, material, object, radiance } = gb, N = [0, 0, 0], E = [0, 0, 0], c = env.cascades, T = TEXELS_PER_CELL, tw = c.tw, th = c.th;
+  const { w, h, depth, normal, material, object, radiance } = gb, N = [0, 0, 0], E = [0, 0, 0], R = [0, 0, 0, 0, 0, 0], K = [0, 0], c = env.cascades, T = TEXELS_PER_CELL, tw = c.tw, th = c.th;
   const L = env.dir.d, LC = env.dir.color, amb = env.ambient, time = env.time, exp = env.exposure ?? 1, sh = env.shadow;
   // probe irradiance is cached per 2x3 micro-cell column while the surface (normal, object) is unchanged
   const cw = (w + 1) >> 1, cKey = shade._k && shade._k.length === cw ? shade._k : (shade._k = new Int32Array(cw)), cE = shade._e && shade._e.length === cw * 3 ? shade._e : (shade._e = new Float32Array(cw * 3));
   for (let y = 0; y < h; y++) {
     if (y % 3 === 0) cKey.fill(-1);
-    const vy = (y + 0.5 - cam.cy) / cam.f;
     for (let x = 0; x < w; x++) {
       const i = y * w + x, m = material[i], d = depth[i], o = i * 3;
       if (d >= FAR) { // sky: vertical gradient plus yaw-stable stars
+        skyCoords(cam, x + 0.5, y + 0.5, K); const vy = K[1];
         const el = Math.max(0, Math.min(1, -vy * 1.6)); let r = env.skyHorizon[0] + (env.skyTop[0] - env.skyHorizon[0]) * el, g = env.skyHorizon[1] + (env.skyTop[1] - env.skyHorizon[1]) * el, b = env.skyHorizon[2] + (env.skyTop[2] - env.skyHorizon[2]) * el;
-        if (env.stars && vy < -0.02) { const az = cam.yaw + Math.atan((x + 0.5 - w / 2) / cam.f), s = hash2(Math.floor(az * 150), Math.floor(vy * 150)); if (s > 0.992) { const k = (s - 0.992) * 125 * env.stars * (0.7 + 0.3 * Math.sin(time * 2 + s * 400)); r += k; g += k; b += k * 1.1; } }
+        if (env.stars && vy < -0.02) { const s = hash2(Math.floor(K[0] * 150), Math.floor(vy * 150)); if (s > 0.992) { const k = (s - 0.992) * 125 * env.stars * (0.7 + 0.3 * Math.sin(time * 2 + s * 400)); r += k; g += k; b += k * 1.1; } }
         radiance[o] = r * exp; radiance[o + 1] = g * exp; radiance[o + 2] = b * exp; continue;
       }
-      const a = (x + 0.5 - w / 2) / cam.f, wx = cam.x + (cam.fx + cam.rx * a) * d, wz = cam.z + (cam.fz + cam.rz * a) * d, wy = cam.y - vy * d;
+      ray(cam, x + 0.5, y + 0.5, R); const wx = R[0] + R[3] * d, wy = R[1] + R[4] * d, wz = R[2] + R[5] * d;
       octDecode(normal, i * 2, N); gb.nrm[o] = N[0]; gb.nrm[o + 1] = N[1]; gb.nrm[o + 2] = N[2];
       // procedural albedo detail: gives the shape matcher and structure tensor real surface structure
       let k = 1;
@@ -77,18 +78,18 @@ export function shade(gb, cam, env) {
       else if (m === 9) k = 0.7 + 0.5 * hash2(Math.floor(wx * 9), Math.floor(wz * 9));
       else if (m === 8) k = 0.6 + 0.5 * Math.sin(wx * 2.3 + time * 0.9 + Math.sin(wz * 1.7 - time * 0.6) * 1.5) ** 2;
       else if (m === 10) k = 0.6 + 0.5 * Math.sin((wx + wz) * 9 + Math.sin(wy * 3) * 2) ** 2;
-      else if (m === 4 || m === 3 || m === 11) k = 0.75 + 0.3 * Math.sin(wy * 23 + (wx + wz) * 7) ** 2;
+      else if (m === 4 || m === 3 || m === 11 || m === 16) k = 0.75 + 0.3 * Math.sin(wy * 23 + (wx + wz) * 7) ** 2;
       // direct directional light with plan-view height shadow
       let lit = Math.max(0, N[0] * L[0] + N[1] * L[1] + N[2] * L[2]);
       if (lit > 0 && sh) { const tx = Math.floor((wx / CELL) * T), tz = Math.floor((wz / CELL) * T); if (tx >= 0 && tz >= 0 && tx < tw && tz < th && !sh[tz * tw + tx] && (object[i] === 0 || wy < 1.2)) lit *= 0.12; }
       const cc = x >> 1, key = (normal[i * 2] & 0xfff0) ^ ((normal[i * 2 + 1] & 0xfff0) << 12) ^ (object[i] << 4) ^ m;
       if (cKey[cc] === key) { E[0] = cE[cc * 3]; E[1] = cE[cc * 3 + 1]; E[2] = cE[cc * 3 + 2]; }
       else { probeIrradiance(c, wx, wz, N[0], N[1], N[2], E); cKey[cc] = key; cE[cc * 3] = E[0]; cE[cc * 3 + 1] = E[1]; cE[cc * 3 + 2] = E[2]; }
-      // the singer's presence: a point light at the eye (no visible shadows by construction), inverse-square falloff
+      // the singer's presence: a point light carried by the singer (no visible shadows by construction), inverse-square falloff
       let lan = 0;
-      if (env.lantern) { const lx = cam.x - wx, ly = cam.y - 0.25 - wy, lz = cam.z - wz, d2 = lx * lx + ly * ly + lz * lz, il = 1 / Math.sqrt(d2 || 1); lan = (env.lantern.intensity * Math.max(0, (N[0] * lx + N[1] * ly + N[2] * lz) * il)) / (1 + d2 * env.lantern.falloff); }
+      if (env.lantern) { const lx = env.lantern.x - wx, ly = env.lantern.y - wy, lz = env.lantern.z - wz, d2 = lx * lx + ly * ly + lz * lz, il = 1 / Math.sqrt(d2 || 1); lan = (env.lantern.intensity * Math.max(0, (N[0] * lx + N[1] * ly + N[2] * lz) * il)) / (1 + d2 * env.lantern.falloff); }
       // soft rim toward the viewer keeps silhouettes sculpted in near-darkness
-      const rim = Math.max(0, -(N[0] * (cam.fx + cam.rx * a) + N[2] * (cam.fz + cam.rz * a)) + N[1] * vy) * (object[i] ? 0.06 : 0.02);
+      const rim = Math.max(0, -(N[0] * R[3] + N[2] * R[5]) - N[1] * R[4]) * (object[i] ? 0.06 : 0.02);
       let al = ALB[m], em = EMI[m], pulse = m === 13 || m === 6 ? 0.65 + 0.35 * Math.sin(time * 1.7 + (wx + wy + wz) * 2.1) : m === 15 ? 0.7 + 0.3 * Math.sin(time * 9 + wy * 8) : 1;
       if (m === 13) { // inscribed stone: lines of glowing script on dark stone, not a glowing slab
         const line = wy * 2.4, u = (wx + wz) * 1.6, inScript = line - Math.floor(line) < 0.42 && hash2(Math.floor(u), Math.floor(line)) > 0.3 && wy > 0.4 && wy < 3.2;
@@ -133,15 +134,18 @@ export function binFogBodies(fog) {
   fog.blobGrid = { src: B, x0, z0, w, h, start: count, list };
 }
 export function integrateFog(fog, gb, cam, env, noise) {
-  const { fw, fh, scale, steps } = fog, c = env.cascades, time = env.time, exp = env.exposure ?? 1;
+  const { fw, fh, scale, steps } = fog, c = env.cascades, time = env.time, exp = env.exposure ?? 1, R = [0, 0, 0, 0, 0, 0];
   binFogBodies(fog);
   for (let fy = 0; fy < fh; fy++) for (let fx = 0; fx < fw; fx++) {
     const sx = Math.min(gb.w - 1, fx * scale + (scale >> 1)), sy = Math.min(gb.h - 1, fy * scale + (scale >> 1)), i = fy * fw + fx;
-    const d = Math.min(fog.maxDist, gb.depth[sy * gb.w + sx]), a = (sx + 0.5 - gb.w / 2) / cam.f, vy = (sy + 0.5 - cam.cy) / cam.f;
-    const dx = cam.fx + cam.rx * a, dz = cam.fz + cam.rz * a, ds = (d / steps) * Math.sqrt(dx * dx + dz * dz + vy * vy), jitter = noise ? noise[((fy & 31) << 5) | (fx & 31)] / 256 : 0.5;
+    const dep = gb.depth[sy * gb.w + sx], d = cam.ortho ? (dep >= FAR ? 0 : dep) : Math.min(fog.maxDist, dep); ray(cam, sx + 0.5, sy + 0.5, R);
+    const dx = R[3], dy = R[4], dz = R[5], jitter = noise ? noise[((fy & 31) << 5) | (fx & 31)] / 256 : 0.5;
+    // the orthographic camera sits far above the fog: march only the last stretch of the ray, from four scale heights down to
+    // the surface (rays that leave the map carry no fog)
+    const t0 = cam.ortho ? Math.max(0, d - (fog.height * 4) / Math.max(0.05, -dy)) : 0, span = d - t0, ds = (span / steps) * Math.sqrt(dx * dx + dz * dz + dy * dy);
     let T = 1, r = 0, g = 0, b = 0;
     for (let s = 0; s < steps; s++) {
-      const t = ((s + jitter) / steps) * d, px = cam.x + dx * t, pz = cam.z + dz * t, py = cam.y - vy * t;
+      const t = t0 + ((s + jitter) / steps) * span, px = R[0] + dx * t, pz = R[2] + dz * t, py = R[1] + dy * t;
       const sigma = fogDensity(fog, px, py, pz, time); if (sigma <= 0) continue;
       const Tseg = Math.exp(-sigma * ds), k = T * (1 - Tseg) * fog.albedo;
       const cx = Math.floor(px / CELL), cz = Math.floor(pz / CELL); let fr = 0, fg = 0, fb = 0;

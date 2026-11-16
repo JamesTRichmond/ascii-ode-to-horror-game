@@ -5,9 +5,10 @@ import { solidAt } from '../sim/sim.js';
 export const METRES_PER_CELL = 2, UNIT = 1024;
 
 /** Position of a world point relative to the listener, in metres, in WebAudio's default listener frame
- *  (listener at the origin facing -Z, +X to the right). The simulation's right vector is (-sin, cos). */
-export function relativePosition(L, x, z) {
-  const th = L.yaw, dx = (x - L.x) / UNIT * METRES_PER_CELL, dz = (z - L.z) / UNIT * METRES_PER_CELL;
+ *  (listener at the origin facing -Z, +X to the right). The simulation's right vector is (-sin, cos). `yaw` is the
+ *  listener's orientation: the facing by default, the camera azimuth under the dimetric camera. */
+export function relativePosition(L, x, z, yaw = L.yaw) {
+  const th = yaw, dx = (x - L.x) / UNIT * METRES_PER_CELL, dz = (z - L.z) / UNIT * METRES_PER_CELL;
   const fwd = dx * Math.cos(th) + dz * Math.sin(th), right = -dx * Math.sin(th) + dz * Math.cos(th);
   return { x: right, y: 0, z: -fwd };
 }

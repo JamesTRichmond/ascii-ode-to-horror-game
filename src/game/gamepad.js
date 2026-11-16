@@ -12,7 +12,8 @@ const pressed = (gp, i) => { const b = gp.buttons[i]; return !!b && (b.pressed |
 /** Radial dead zone with rescale: |out| = 0 inside DEAD, 0..1 linearly outside. */
 export function deadzone(x, y, dz = DEAD) { const m = Math.hypot(x, y); if (m < dz) return [0, 0]; const k = Math.min(1, (m - dz) / (1 - dz)) / m; return [x * k, y * k]; }
 
-/** Map one gamepad snapshot to the simulation's buttons and turn amount for one tick. */
+/** Map one gamepad snapshot to the simulation's buttons and turn amount for one tick. When the left stick is deflected
+ *  past the dead zone, `stick` carries it ([x right, y down]) for the dimetric camera's screen-relative heading. */
 export function gamepadInput(gp, sensitivity = 1) {
   if (!gp || !gp.connected) return { buttons: 0, turn: 0 };
   let b = 0; const [lx, ly] = deadzone(gp.axes[0] || 0, gp.axes[1] || 0), [rx] = deadzone(gp.axes[2] || 0, 0);
@@ -20,7 +21,7 @@ export function gamepadInput(gp, sensitivity = 1) {
   if (lx < -0.3 || pressed(gp, PAD.LEFT)) b |= IN.LEFT; if (lx > 0.3 || pressed(gp, PAD.RIGHT)) b |= IN.RIGHT;
   if (pressed(gp, PAD.RT)) b |= IN.HUM; if (pressed(gp, PAD.LT)) b |= IN.HOLD; if (pressed(gp, PAD.RB) || pressed(gp, PAD.X)) b |= IN.CHORD; if (pressed(gp, PAD.A)) b |= IN.USE;
   const turn = Math.sign(rx) * Math.abs(rx) ** 1.6 * TURN_MAX * sensitivity; // gentle near the centre, fast at the edge
-  return { buttons: b, turn };
+  const r = { buttons: b, turn }; if (lx || ly) r.stick = [lx, ly]; return r;
 }
 
 /** Menu intents from the change between two snapshots: 'down' | 'up' | 'left' | 'right' | 'activate' | 'back' | 'start' | null. */
