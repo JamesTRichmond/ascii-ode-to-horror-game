@@ -1,0 +1,4 @@
+{
+  "endpoint": null,
+  "note": "Telemetry is disabled in this build. A deployment that wants opt-in diagnostics sets endpoint to a same-origin path (\"/api/telemetry\"), which needs nothing else, or an https URL, which also needs that origin added to connect-src in the Content-Security-Policy in vercel.json and a collector that answers the CORS preflight for the game's origin (see docs/LIVE_OPS.md, section 1). Players must still opt in under Settings."
+}

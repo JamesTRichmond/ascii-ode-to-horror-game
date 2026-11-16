@@ -2,8 +2,10 @@
 // Browser acceptance checks (needs a local Playwright + Chromium; not a project dependency).
 // Usage: node tools/browser-check.mjs [--dir dist] [--out dir] [--seconds 6] [--quality auto] [--gpu]
 // Starts the static server itself, then reports JSON:
-//   chapters  every chapter loads in play mode with zero console errors; frame p50/p95
+//   chapters  every chapter loads in play mode with zero console errors and the autoplay bot driving; frame p50/p95
 //   ui        title -> begin -> pause (Esc) -> settings -> resume, keyboard focus trap, audio running
+//   liveops   Endless Choir loads; a deliberate fault shows the crash overlay with replay context, sends nothing;
+//             dying in Endless ends the run (mode dead, input off, run-over card)
 //   hud       no panel overlap and no horizontal scroll at 1280px/100%, 1280px/200%, 320px/100%
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -30,9 +32,9 @@ try {
   for (let c = 1; c <= 9; c++) {
     const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
     await p.goto(`${base}?chapter=${c}&autoplay=1&quality=${quality}`); await p.waitForTimeout(seconds * 1000);
-    const s = await p.evaluate(() => globalThis.__ode.stats());
+    const s = await p.evaluate(() => globalThis.__ode.stats()), botInputs = await p.evaluate(() => __ode.G.bot ? __ode.G.log.filter(Boolean).length : -1);
     if (out) await p.screenshot({ path: path.join(out, `chapter${c}.png`) });
-    report.chapters.push({ chapter: c, tier: s.tier, mode: s.mode, tick: s.tick, output: s.out.kind, glyphs: s.glyphs.emitted, frameP50: q(s.frames, 0.5), frameP95: q(s.frames, 0.95), switchP95: q(s.switchRates.map(v => v * 100), 0.95), errors: errs });
+    report.chapters.push({ chapter: c, tier: s.tier, mode: s.mode, tick: s.tick, output: s.out.kind, glyphs: s.glyphs.emitted, frameP50: q(s.frames, 0.5), frameP95: q(s.frames, 0.95), botInputs, switchP95: q(s.switchRates.map(v => v * 100), 0.95), errors: errs });
     await p.close();
   }
   { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
@@ -43,7 +45,21 @@ try {
     const tabs = []; for (let i = 0; i < 6; i++) { await p.keyboard.press('Tab'); tabs.push(await p.evaluate(() => document.activeElement?.textContent)); }
     await p.click('text=Settings'); await p.selectOption('select[data-k="reducedMotion"]', 'true'); await p.click('text=Done'); await p.click('text=Resume'); await p.waitForTimeout(500);
     const st = await p.evaluate(() => ({ mode: __ode.G.mode, audio: __ode.G.audio.ctx?.state ?? 'none', reducedMotion: __ode.G.pl.opts.reducedMotion }));
-    report.ui = { title, paused, focusCycle: tabs, ...st, errors: errs }; await p.close(); }
+    // every simulation event must reach the presentation layer (audio, HUD, effects, death/completion flow): force chords
+    await p.goto(base + '?chapter=2&quality=low'); await p.waitForFunction(() => globalThis.__ode?.G.sim); await p.waitForTimeout(500);
+    await p.evaluate(() => { const G = __ode.G, ev = G.audio.event; G.__presented = 0; G.audio.event = e => { G.__presented++; ev(e); }; G.input.poll = () => 128; });
+    await p.waitForTimeout(1500); const events = await p.evaluate(() => ({ presented: __ode.G.__presented, pending: __ode.G.sim.events.length }));
+    report.ui = { title, paused, focusCycle: tabs, ...st, events, errors: errs }; await p.close(); }
+  { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
+    await p.goto(`${base}?endless=7&depth=2&autoplay=1&quality=low`); await p.waitForTimeout(3000);
+    const e = await p.evaluate(() => ({ kicker: document.getElementById('chapterKicker').textContent, mode: __ode.G.mode, tick: __ode.G.sim.tick }));
+    await p.evaluate(() => { __ode.G.pl.sel = null; }); await p.waitForTimeout(600); // deliberate render-stage fault
+    const c = await p.evaluate(() => ({ mode: __ode.G.mode, overlay: document.getElementById('menuTitle')?.textContent, crashes: __ode.G.telemetry.crashes.length, sent: __ode.G.telemetry.sent, hasReplayContext: !!(__ode.G.telemetry.crashes[0]?.inputs?.length && __ode.G.telemetry.crashes[0]?.endless) }));
+    await p.evaluate(() => [...document.querySelectorAll('#menu button')].find(b => b.textContent === 'Restart verse')?.click()); await p.waitForTimeout(800); // recovery rebuilds the pipeline
+    const rec = await p.evaluate(() => ({ mode: __ode.G.mode, crashes: __ode.G.telemetry.crashes.length, tick: __ode.G.sim.tick, depth: __ode.G.endless?.depth }));
+    await p.evaluate(() => { const s = __ode.G.sim; s.c.dead = 1; s.p.hp = 0; s.events.push({ type: 'death', x: s.p.x, z: s.p.z, a: 0, tick: s.tick }); }); await p.waitForTimeout(2200); /* the same event the sim emits on a fatal hit */
+    const dead = await p.evaluate(() => ({ mode: __ode.G.mode, inputEnabled: __ode.G.input.enabled, card: document.getElementById('menuTitle')?.textContent, kicker: document.querySelector('#menu h2')?.textContent }));
+    report.liveops = { endless: e, crash: c, recovered: rec, dead, errors: errs }; /* unfiltered: the deliberate fault is caught by the frame guard and logs nothing */ await p.close(); }
   // [css width, css height, HUD text scale, device pixel ratio]: 200% text; 200% browser zoom (half the CSS viewport at 2x density); narrow phone
   for (const [w, h, scale, dpr] of [[1280, 720, 1, 1], [1280, 720, 2, 1], [640, 360, 1, 2], [320, 640, 1, 1]]) {
     const p = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr }), errs = watch(p);
@@ -56,7 +72,10 @@ try {
 } finally { await browser.close(); server.kill(); }
 const PAUSE_MENU = new Set(['Resume', 'Settings', 'Restart chapter', 'Save and quit to title']);
 const uiOk = !!report.ui && report.ui.paused === 'PAUSED' && report.ui.mode === 'play' && !report.ui.errors.length
-  && report.ui.audio === 'running' && report.ui.reducedMotion === true && report.ui.focusCycle.length > 0 && report.ui.focusCycle.every(t => PAUSE_MENU.has(t));
-const ok = report.chapters.every(c => c.mode === 'play' && !c.errors.length) && uiOk && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length);
+  && report.ui.audio === 'running' && report.ui.reducedMotion === true && report.ui.events.presented > 0 && report.ui.events.pending === 0 && report.ui.focusCycle.length > 0 && report.ui.focusCycle.every(t => PAUSE_MENU.has(t));
+const ok = report.chapters.every(c => c.mode === 'play' && c.botInputs > 0 && !c.errors.length) && uiOk && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length)
+  && report.liveops?.endless.mode === 'play' && report.liveops?.crash.overlay === 'SOMETHING BROKE' && report.liveops.crash.sent === 0 && report.liveops.crash.hasReplayContext
+  && report.liveops.recovered.mode === 'play' && report.liveops.recovered.crashes === report.liveops.crash.crashes && report.liveops.recovered.depth === 2 && !report.liveops.errors.length
+  && report.liveops.dead.mode === 'dead' && report.liveops.dead.inputEnabled === false && report.liveops.dead.card === 'UNWRITTEN' && report.liveops.dead.kicker === 'ENDLESS CHOIR';
 if (out) fs.writeFileSync(path.join(out, 'browser-check.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 1)); console.log(ok ? 'BROWSER CHECK PASSED' : 'BROWSER CHECK FAILED'); process.exit(ok ? 0 : 1);

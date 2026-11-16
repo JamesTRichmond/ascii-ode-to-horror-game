@@ -11,7 +11,7 @@ previous phase branch so its diff shows only that phase. Merge in order.
 | 3b | `phase-3b-content` | Production — content complete | Audio, lighting/fog passes, temporal and HUD polish | tuning of 3, 5, 6 |
 | 4 | `phase-4-rc` | Testing & Polish | Fixture report, benchmarks, balance, bug-fix changelog | all fixtures |
 | 5 | `phase-5-launch` | Launch & Release | Production bundle, deploy configs, release notes, checklist | — |
-| 6 | `phase-6-liveops` | Post-Launch | Telemetry, crash reporting, hotfix pipeline, endless mode | — |
+| 6 | `phase-6-liveops` | Post-Launch | Telemetry, crash reporting, hotfix pipeline, Endless Choir; post-launch roadmap in `docs/LIVE_OPS.md` | — |
 
 ## No-drift rules
 

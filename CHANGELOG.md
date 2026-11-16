@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0-rc.1 — Phase 6 (Post-launch & live operations)
+
+### Added
+- **Endless Choir** expansion: deterministic verse generator, weekly seed, best-depth record, menu entry.
+- Opt-in, first-party telemetry (off by default; `telemetry.json` ships without an endpoint).
+- Crash capture with an in-game report overlay; reports carry the RLE input log and replay exactly.
+- `tools/replay.mjs`, `tools/record-fixture.mjs`, `tools/hotfix.mjs`; regression fixtures under `tests/regressions/`.
+- `docs/LIVE_OPS.md`: telemetry schema, crash flow, hotfix pipeline, maintenance, roadmap.
+
+### Fixed
+- Missing `telemetry.json`, `version.json` (dev) and favicon produced console 404s.
+
 ## 1.0.0-rc.2 — Phase 5 (Launch & Release)
 
 ### Added

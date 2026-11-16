@@ -13,7 +13,7 @@ export function createHud() {
   const bar = (id, pct) => set($(id), id, Math.round(pct), (el, v) => { el.firstElementChild.style.width = v + '%'; el.setAttribute('aria-valuenow', v); });
 
   hud.show = on => { $('hud').hidden = !on; };
-  hud.setChapter = (def, total) => { $('chapterKicker').textContent = `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
+  hud.setChapter = (def, total, endless = null) => { $('chapterKicker').textContent = endless ? `ENDLESS CHOIR · SEED ${endless.seed} · VERSE ${endless.depth}` : `CHAPTER ${def.id} OF ${total} · STANZA ${def.id}`; $('chapterTitle').textContent = def.title.toUpperCase(); hud.last = {}; $('caption').textContent = ''; $('alert').textContent = ''; hud.captionQueue = []; };
   hud.caption = (lines, seconds = 3.2) => { for (const l of [].concat(lines)) hud.captionQueue.push([l, seconds]); };
   hud.pain = () => { hud.hurt = 0.8; };
   hud.alert = (text, seconds = 2.4) => { $('alert').textContent = text; hud.alertTimer = seconds; };
@@ -68,7 +68,7 @@ export function createHud() {
     const m = $('menu'); m.hidden = false;
     m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="menuTitle">${kicker ? `<h2>${esc(kicker)}</h2>` : ''}<h1 id="menuTitle">${esc(title)}</h1>${body || ''}<nav>${items.map((it, i) => `<button data-i="${i}" class="${it.primary ? 'primary' : ''}" ${it.disabled ? 'disabled' : ''}>${esc(it.label)}</button>`).join('')}</nav></div>`;
     m.onclick = e => { const b = e.target.closest('button[data-i]'); if (b && !b.disabled) items[+b.dataset.i].action(); };
-    m.onkeydown = e => { if (e.key !== 'Tab') return; const f = [...m.querySelectorAll('button:not([disabled]),select,input')]; if (!f.length) return; const first = f[0], last = f[f.length - 1]; if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); } else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); } };
+    m.onkeydown = e => { if (e.key !== 'Tab') return; const f = [...m.querySelectorAll('button:not([disabled]),select,input,textarea')]; if (!f.length) return; const first = f[0], last = f[f.length - 1]; if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); } else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); } };
     (m.querySelector('button.primary:not([disabled])') || m.querySelector('button:not([disabled])'))?.focus();
     return m;
   };
