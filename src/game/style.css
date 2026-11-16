@@ -65,3 +65,5 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
 #igt { font-variant-numeric: tabular-nums; color: var(--ink); letter-spacing: .04em; white-space: nowrap; } #igt:empty { display: none; }
 #igt.ahead, .splits .ahead td { color: #7ee08a; } #igt.behind, .splits .behind td { color: var(--red); } #igt.gold, .splits .gold td { color: var(--gold); }
 .splits { border-collapse: collapse; font-variant-numeric: tabular-nums; } .splits th, .splits td { text-align: left; padding: 1px 10px 1px 0; font-weight: 400; } .splits thead th { color: var(--dim); }
+.binds { border-collapse: collapse; width: 100%; } .binds th { text-align: left; font-weight: 400; color: var(--dim); padding: 2px 8px 2px 0; } .binds td { padding: 2px 6px; }
+.binds kbd { font: inherit; color: var(--ink); border: 1px solid var(--line); padding: 0 6px; white-space: nowrap; }
