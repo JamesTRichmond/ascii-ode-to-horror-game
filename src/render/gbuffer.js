@@ -31,7 +31,7 @@ export function octDecode(src, o, out) {
   const l = 1 / Math.hypot(x, y, z); out[0] = x * l; out[1] = y * l; out[2] = z * l; return out;
 }
 
-export { makeCamera, setCamera, copyCamera, project, unproject } from './camera.js';
+export { makeCamera, setCamera, setDimetric, copyCamera, project, unproject } from './camera.js';
 import { project, unproject } from './camera.js';
 
 /**
@@ -83,6 +83,55 @@ export function traceWorld(gb, world, cam) {
   }
 }
 
+/**
+ * Trace the height-field world under the dimetric camera. Rays are parallel, so every pixel of a screen column lies in
+ * one vertical plane through the plan line O + F * s (F = plan forward); the column is walked once, near to far, as a
+ * grid march (Amanatides-Woo) with height tests. A nearer surface always lands lower on screen than anything it hides,
+ * so the unpainted rows shrink monotonically from the bottom and every pixel is written at most once. Ceilings and roofs
+ * are not drawn: the camera looks down into every interior. Rays that leave the map miss (sky).
+ * cut: {x, z, r, h} or null. Cells on the camera's side of (x, z), within r of it across the view and near enough for
+ * their top to shadow it (plan distance below height / tan(elevation)), are clamped to height h (cut-away).
+ */
+export function traceWorldOrtho(gb, world, cam, cut = null) {
+  const { w, h, depth, normal, tangent, material, object } = gb, W = world.w, H = world.h, { floorH, topMat, wallMat } = world;
+  const { fx, fz, rx, rz, scale, sy: sY, cy } = cam, sp = -cam.dy, cp = cam.uy, ey = cam.y;
+  depth.fill(FAR); material.fill(0); object.fill(0);
+  const nUp = [0, 0], nX = [[0, 0], [0, 0]], nZ = [[0, 0], [0, 0]], tX = [0, 0], tZ = [0, 0];
+  octEncode(0, 1, 0, nUp, 0); octEncode(1, 0, 0, nX[0], 0); octEncode(-1, 0, 0, nX[1], 0); octEncode(0, 0, 1, nZ[0], 0); octEncode(0, 0, -1, nZ[1], 0); octEncode(1, 0, 0, tX, 0); octEncode(0, 0, 1, tZ, 0);
+  // plan distance range that can reach the screen: the bottom row at the tallest possible surface, the top row at the lowest
+  const sNear = ((cy - h) / sY - (9 - ey) * cp) / sp, sFar = (cy / sY - (-0.5 - ey) * cp) / sp;
+  const sX = fx > 0 ? 1 : -1, sZ = fz > 0 ? 1 : -1, tDX = Math.abs(CELL / (fx || 1e-9)), tDZ = Math.abs(CELL / (fz || 1e-9));
+  const cot = cp / sp, heightAt = (ci, cx, cz) => { let fh = floorH[ci]; if (cut && fh > cut.h) { const dx = (cx + 0.5) * CELL - cut.x, dz = (cz + 0.5) * CELL - cut.z, along = dx * fx + dz * fz; if (along < 0.6 && along > -(fh * cot + 1) && Math.abs(dx * rx + dz * rz) < cut.r) fh = cut.h; } return fh; };
+  for (let x = 0; x < w; x++) {
+    const u = (x + 0.5 - w / 2) / scale, ox = cam.x + rx * u, oz = cam.z + rz * u;
+    // clip the plan segment [sNear, sFar] to the map
+    let s0 = sNear, sEnd = sFar;
+    for (const [o, d, L] of [[ox, fx, W * CELL], [oz, fz, H * CELL]]) { if (Math.abs(d) < 1e-9) { if (o < 0 || o >= L) { s0 = 1; sEnd = 0; } continue; } const a = (0 - o) / d, b = (L - o) / d; s0 = Math.max(s0, Math.min(a, b)); sEnd = Math.min(sEnd, Math.max(a, b)); }
+    if (s0 >= sEnd) continue;
+    const px = ox + fx * (s0 + 1e-6), pz = oz + fz * (s0 + 1e-6); let cx = Math.floor(px / CELL), cz = Math.floor(pz / CELL), bot = h - 1;
+    if (cx < 0 || cz < 0 || cx >= W || cz >= H) continue;
+    let tMX = ((fx > 0 ? cx + 1 : cx) * CELL - ox) / (fx || 1e-9), tMZ = ((fz > 0 ? cz + 1 : cz) * CELL - oz) / (fz || 1e-9), t0 = s0;
+    for (let it = 0; it < 256 && bot >= 0 && t0 < sEnd; it++) {
+      const ci = cz * W + cx, fh = heightAt(ci, cx, cz), side = tMX < tMZ ? 0 : 1, t1 = side ? tMZ : tMX, k = (fh - ey) * cp;
+      { // top face over [t0, t1]
+        const yS = Math.max(0, Math.ceil(cy - (t1 * sp + k) * sY - 0.5)), yE = Math.min(bot, Math.floor(cy - (t0 * sp + k) * sY - 0.5)), m = topMat[ci];
+        for (let y = yS; y <= yE; y++) { const i = y * w + x, s = ((cy - y - 0.5) / sY - k) / sp; depth[i] = s * cp - (fh - ey) * sp; material[i] = m; normal[i * 2] = nUp[0]; normal[i * 2 + 1] = nUp[1]; tangent[i * 2] = tX[0]; tangent[i * 2 + 1] = tX[1]; }
+        if (yS - 1 < bot) bot = yS - 1;
+      }
+      if (side) { cz += sZ; tMZ += tDZ; } else { cx += sX; tMX += tDX; }
+      if (cx < 0 || cz < 0 || cx >= W || cz >= H) break;
+      const ni = cz * W + cx, nfh = heightAt(ni, cx, cz);
+      if (nfh > fh && bot >= 0) { // riser facing the camera at t1
+        const nn = side ? nZ[sZ > 0 ? 1 : 0] : nX[sX > 0 ? 1 : 0], tt = side ? tX : tZ, m = wallMat[ni], b = t1 * sp;
+        const yS = Math.max(0, Math.ceil(cy - (b + (nfh - ey) * cp) * sY - 0.5)), yE = Math.min(bot, Math.floor(cy - (b + k) * sY - 0.5));
+        for (let y = yS; y <= yE; y++) { const i = y * w + x, dy = ((cy - y - 0.5) / sY - b) / cp; depth[i] = t1 * cp - dy * sp; material[i] = m; normal[i * 2] = nn[0]; normal[i * 2 + 1] = nn[1]; tangent[i * 2] = tt[0]; tangent[i * 2 + 1] = tt[1]; }
+        if (yS - 1 < bot) bot = yS - 1;
+      }
+      t0 = t1;
+    }
+  }
+}
+
 const P0 = [0, 0, 0], P1 = [0, 0, 0];
 /**
  * Rasterise a transformed mesh, perspective-correct, depth-tested.
@@ -91,10 +140,10 @@ const P0 = [0, 0, 0], P1 = [0, 0, 0];
  */
 export function rasterMesh(gb, cam, prevCam, mesh, wp, wn, wt, pp, objectId) {
   const { w, h, depth, normal, tangent, material, object, velocity } = gb, nv = mesh.vcount;
-  const sc = mesh._sc || (mesh._sc = new Float32Array(nv * 5)); // sx, sy, 1/z, prev sx, prev sy
+  const sc = mesh._sc || (mesh._sc = new Float32Array(nv * 5)), ortho = cam.ortho; // sx, sy, 1/z (depth itself under the orthographic camera), prev sx, prev sy
   for (let v = 0; v < nv; v++) {
     project(cam, wp[v * 3], wp[v * 3 + 1], wp[v * 3 + 2], P0); project(prevCam, pp[v * 3], pp[v * 3 + 1], pp[v * 3 + 2], P1);
-    sc[v * 5] = P0[0]; sc[v * 5 + 1] = P0[1]; sc[v * 5 + 2] = P0[2] > 0.2 ? 1 / P0[2] : -1; sc[v * 5 + 3] = P1[2] > 0.05 ? P1[0] : P0[0]; sc[v * 5 + 4] = P1[2] > 0.05 ? P1[1] : P0[1];
+    sc[v * 5] = P0[0]; sc[v * 5 + 1] = P0[1]; sc[v * 5 + 2] = P0[2] > 0.2 ? (ortho ? P0[2] : 1 / P0[2]) : -1; sc[v * 5 + 3] = P1[2] > 0.05 ? P1[0] : P0[0]; sc[v * 5 + 4] = P1[2] > 0.05 ? P1[1] : P0[1];
   }
   const tris = mesh.tris, mats = mesh.mat; let drawn = 0;
   for (let t = 0; t < tris.length; t += 3) {
@@ -110,9 +159,10 @@ export function rasterMesh(gb, cam, prevCam, mesh, wp, wn, wt, pp, objectId) {
       const px = x + 0.5, py = y + 0.5;
       let p = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) * inv, q = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) * inv, r = 1 - p - q;
       if (p < 0 || q < 0 || r < 0) continue;
-      p *= wa; q *= wb; r *= wc; const z = 1 / (p + q + r), i = y * w + x;
+      const i = y * w + x; let z;
+      if (ortho) z = p * wa + q * wb + r * wc; else { p *= wa; q *= wb; r *= wc; z = 1 / (p + q + r); } // parallel rays: depth is affine in screen space
       if (z >= depth[i]) continue;
-      p *= z; q *= z; r *= z; depth[i] = z; material[i] = m; object[i] = objectId;
+      if (!ortho) { p *= z; q *= z; r *= z; } depth[i] = z; material[i] = m; object[i] = objectId;
       octEncode(p * wn[a * 3] + q * wn[b * 3] + r * wn[c * 3], p * wn[a * 3 + 1] + q * wn[b * 3 + 1] + r * wn[c * 3 + 1], p * wn[a * 3 + 2] + q * wn[b * 3 + 2] + r * wn[c * 3 + 2], normal, i * 2);
       octEncode(p * wt[a * 3] + q * wt[b * 3] + r * wt[c * 3], p * wt[a * 3 + 1] + q * wt[b * 3 + 1] + r * wt[c * 3 + 1], p * wt[a * 3 + 2] + q * wt[b * 3 + 2] + r * wt[c * 3 + 2], tangent, i * 2);
       velocity[i * 2] = px - (p * sc[a * 5 + 3] + q * sc[b * 5 + 3] + r * sc[c * 5 + 3]); velocity[i * 2 + 1] = py - (p * sc[a * 5 + 4] + q * sc[b * 5 + 4] + r * sc[c * 5 + 4]);
