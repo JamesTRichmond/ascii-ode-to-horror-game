@@ -23,13 +23,13 @@ Command: `npm test` → **76 tests, 76 pass, 0 fail.**
 | | Metric depth, HDR radiance, reprojection | Pass — 7.000 m wall, analytic floor, 97 %+ reprojection hits | |
 | 03 Light | Homogeneous slab = exp(−σd) at 10/100/1000 steps | Pass — error < 1e-12 | `phase3-light` |
 | | Renderer fog within 1 %, step halving stable, no negative density | Pass — step halving changes in-scatter 0.06 % | |
-| | Wall occluder | Pass — walled fluence 14.5 % of open at the shadow probe (bilinear merge leak, documented) | |
+| | Wall occluder | Pass — walled fluence 0.0 % of open at the shadow probe with the bilinear-fix merge (14.5 % with the plain merge, still used at the low tier); mean error vs a brute-force reference 0.453 → 0.156 | |
 | | Bounded multi-bounce, colour bleed, energy | Pass — residual 1.000 → 0.264 → 0.086 → 0.030; red stays red | |
 | 04 Shape & flow | Vertical edge → vertical tangent; antiparallel align; isotropic → 0 | Pass | `phase4-shape` |
 | | 6/12/24-D benchmark | Self-match 0.966 / 0.978 / 0.989; 2.56 / 2.08 / 2.91 µs per leaf | |
 | | Thin legs connected; no 180° seams; vs Sobel-only | Pass — 0 seams; roughness 7.52e-4 → 7.38e-4 | |
 | | Jacobian clamp, bounded glyph size | Pass — axis ratio 0.46–3.11 | |
-| | Offline differentiable asset optimisation (guide task 3-3) | **Not implemented.** `src/render/optimize.js` is a relaxation diagnostic only: the export is the per-leaf arg-min at every temperature (coverage gap 0.0538 → 0.0150 measures collapse onto that export, not an improvement) | |
+| | Offline differentiable asset optimisation (guide task 3-3) | **Implemented** (`src/render/heroopt.js`, `tools/optimize-hero.mjs`): softmax-relaxed glyph assignment through a differentiable MSDF rasteriser, perceptual (blurred + detail) L2, Adam with annealed temperature; analytic gradient matches finite differences (< 2 %); discrete export matches the relaxed result (gap 0.00 %) and beats per-cell greedy matching by 3.1 % on the specimen hero, 5.2 % on the test shapes | `heroopt` |
 | 05 Temporal | 1 s decay at 30 vs 120 Hz | Pass — identical to 1e-12 | `phase5-temporal` |
 | | .01 does not cross .025; .10 does | Pass | |
 | | Static scenes stabilise | Pass — p95 glyph change 0.96 % with history, 1.67 % without | |

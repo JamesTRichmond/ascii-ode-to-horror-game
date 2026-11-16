@@ -11,9 +11,10 @@ export class TextGrid {
   /** colour is quantised to 4 bits per channel so neighbouring cells can share a run */
   set(x, y, codepoint, r, g, b) { if (x < 0 || y < 0 || x >= this.cols || y >= this.rows) return; const i = y * this.cols + x; this.ch[i] = codepoint; this.col[i] = ((toneMap(r) * 15) << 8) | ((toneMap(g) * 15) << 4) | (toneMap(b) * 15 | 0); }
   /** Rasterise an instance stream onto the grid (one glyph per covered cell centre, no rotation). */
-  fromInstances(inst, count, atlas, w, h) {
+  /** keepBoxes: terminals have box-drawing glyphs, so only canvas text needs the '+' fallback. */
+  fromInstances(inst, count, atlas, w, h, keepBoxes = false) {
     this.clear(); const sx = this.cols / w, sy = this.rows / h;
-    for (let n = 0; n < count; n++) { const o = n * INSTANCE_FLOATS, g = inst[o + 6] | 0; let cp = atlas.codepoint[g]; if (cp >= 0x2500 && cp < 0x2580) cp = FALLBACK.box.charCodeAt(0); else if (cp >= 0x16a0 && cp < 0x1700) cp = FALLBACK.rune.charCodeAt(0); else if (cp >= 0x1fb00) cp = 0x2588; this.set((inst[o] * sx) | 0, (inst[o + 1] * sy) | 0, cp, inst[o + 7], inst[o + 8], inst[o + 9]); }
+    for (let n = 0; n < count; n++) { const o = n * INSTANCE_FLOATS, g = inst[o + 6] | 0; let cp = atlas.codepoint[g]; if (cp >= 0x2500 && cp < 0x2580) { if (!keepBoxes) cp = FALLBACK.box.charCodeAt(0); } else if (cp >= 0x16a0 && cp < 0x1700) cp = FALLBACK.rune.charCodeAt(0); else if (cp >= 0x1fb00) cp = 0x2588; this.set((inst[o] * sx) | 0, (inst[o + 1] * sy) | 0, cp, inst[o + 7], inst[o + 8], inst[o + 9]); }
     return this;
   }
   /** Collect dirty runs: [{x, y, text, color}] and swap history. Pass full=true to force a full redraw. */

@@ -19,6 +19,15 @@
     "balance": "node tools/balance.mjs",
     "replay": "node tools/replay.mjs",
     "hotfix": "node tools/hotfix.mjs",
-    "fuzz": "node tools/fuzz.mjs"
+    "icons": "node tools/make-icons.mjs",
+    "fuzz": "node tools/fuzz.mjs",
+    "optimize:hero": "node tools/optimize-hero.mjs",
+    "goldens": "node tools/goldens.mjs",
+    "bench": "node tools/bench.mjs",
+    "terminal": "node tools/terminal.mjs",
+    "telemetry:report": "node tools/telemetry-report.mjs"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0"
   }
 }

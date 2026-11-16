@@ -10,7 +10,7 @@ export const toneMap = v => Math.pow(Math.min(1, Math.max(0, v / (1 + v))), 0.65
  * @param out Uint8ClampedArray RGBA, (w*scale) x (h*scale)
  * @param atlasPx {pixels:Uint8Array RGB(A), w, h, channels}
  */
-export function compositeCPU(out, w, h, scale, inst, count, atlas, atlasPx, background = [3, 5, 11]) {
+export function compositeCPU(out, w, h, scale, inst, count, atlas, atlasPx, background = [3, 5, 11], cvd = null) { // cvd: row-major 3x3 or null
   const W = w * scale, H = h * scale, ch = atlasPx.channels, tw = atlas.tileW, tH = atlas.tileH, px = atlasPx.pixels, aw = atlasPx.w;
   for (let i = 0; i < W * H; i++) { out[i * 4] = background[0]; out[i * 4 + 1] = background[1]; out[i * 4 + 2] = background[2]; out[i * 4 + 3] = 255; }
   for (let n = 0; n < count; n++) {
@@ -18,7 +18,8 @@ export function compositeCPU(out, w, h, scale, inst, count, atlas, atlasPx, back
     const det = ax * by - bx * ay; if (Math.abs(det) < 1e-6) continue;
     const ex = Math.abs(ax) + Math.abs(bx), ey = Math.abs(ay) + Math.abs(by), x0 = Math.max(0, Math.floor(cx - ex)), x1 = Math.min(W - 1, Math.ceil(cx + ex)), y0 = Math.max(0, Math.floor(cy - ey)), y1 = Math.min(H - 1, Math.ceil(cy + ey));
     const tx = (g % atlas.cols) * tw, ty = ((g / atlas.cols) | 0) * tH, pxRange = Math.max(1, atlas.range * (Math.sqrt(Math.abs(det)) * 2) / Math.sqrt(tw * tH));
-    const cr = toneMap(inst[o + 7]) * 255, cg = toneMap(inst[o + 8]) * 255, cb = toneMap(inst[o + 9]) * 255, al = inst[o + 10];
+    let r = inst[o + 7], gr = inst[o + 8], b = inst[o + 9]; if (cvd) [r, gr, b] = [cvd[0] * r + cvd[1] * gr + cvd[2] * b, cvd[3] * r + cvd[4] * gr + cvd[5] * b, cvd[6] * r + cvd[7] * gr + cvd[8] * b];
+    const cr = toneMap(Math.max(0, r)) * 255, cg = toneMap(Math.max(0, gr)) * 255, cb = toneMap(Math.max(0, b)) * 255, al = inst[o + 10];
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const dx = x + 0.5 - cx, dy = y + 0.5 - cy, u = (dx * by - dy * bx) / det, v = (dy * ax - dx * ay) / det; if (u < -1 || u > 1 || v < -1 || v > 1) continue;
       const fx = Math.min(tw - 1.001, Math.max(0, (u * 0.5 + 0.5) * tw - 0.5)), fy = Math.min(tH - 1.001, Math.max(0, (v * 0.5 + 0.5) * tH - 0.5)), ix = fx | 0, iy = fy | 0, qx = fx - ix, qy = fy - iy;

@@ -13,8 +13,17 @@ const KINDS = [
   { rule: RULE.BRAZIERS, theme: 5, title: 'Flame', enemy: 'u', hint: 'Light every brazier. Humming gutters the flame.' },
 ];
 
+/** Challenge modifiers (roadmap 1.4). A bitmask; 0 generates exactly the unmodified verse. */
+export const MOD = { SILENT: 1, DAWN: 2, DOUBLE: 4 };
+export const MOD_INFO = [
+  [MOD.SILENT, 'Silent Choir', 'No hum and no chord: you have no voice at all.'],
+  [MOD.DAWN, 'Permanent Dawn', 'The sun surges through every verse. Shelter west of a wall.'],
+  [MOD.DOUBLE, 'Twice the Choir', 'Twice as many threats in every verse.'],
+];
+export const modNames = mods => MOD_INFO.filter(([m]) => mods & m).map(([, n]) => n);
+
 /** @returns a chapter definition accepted by createSim(). */
-export function endlessVerse(seed, depth) {
+export function endlessVerse(seed, depth, mods = 0) {
   let r = (Math.imul(seed | 0, 0x9e3779b1) ^ Math.imul(depth + 1, 0x85ebca6b)) >>> 0 || 1; const rnd = n => { r = xorshift(r); return r % n; };
   const kind = KINDS[(depth - 1) % KINDS.length], g = Array.from({ length: H }, () => Array(W).fill('#'));
   // rooms on a 4 x 2 lattice of slots
@@ -47,9 +56,14 @@ export function endlessVerse(seed, depth) {
   const count = kind.rule & RULE.BREATH_HUNT ? Math.min(1 + (depth >> 2), 4) : Math.min(2 + (depth >> 1), 7), spots = [];
   for (let i = 1; i < rooms.length; i++) { const rm = rooms[i]; spots.push([rm.x0, rm.y0 + rm.h - 1]); }
   for (let i = 0; i < count && spots.length; i++) { const [x, y] = spots.splice(rnd(spots.length), 1)[0]; if (g[y][x] === '.') g[y][x] = kind.enemy[i % kind.enemy.length]; }
+  if (mods & MOD.DOUBLE) { // a second wave on the opposite corners, drawn after everything else so mods = 0 is unchanged
+    const more = []; for (let i = 1; i < rooms.length; i++) { const rm = rooms[i]; more.push([rm.x0 + rm.w - 1, rm.y0 + rm.h - 1], [rm.x0 + rm.w - 1, rm.y0 + (rm.h >> 1)]); }
+    for (let i = 0; i < count && more.length; i++) { const [x, y] = more.splice(rnd(more.length), 1)[0]; if (g[y][x] === '.') g[y][x] = kind.enemy[(i + 1) % kind.enemy.length]; }
+  }
   if (kind.boss && depth >= 8) { const rm = rooms[byFar[1]]; if (g[rm.cy][rm.cx] === '.') g[rm.cy][rm.cx] = kind.boss; }
   const map = g.map(row => row.join(''));
-  return { id: kind.theme, title: `Endless Choir — Verse ${depth} (${kind.title})`, rule: kind.rule, need: kind.rule & RULE.BRAZIERS ? 0 : need, indoor: 1, dark: kind.rule & RULE.BRAZIERS ? 1 : 0, hint: kind.hint, endless: { seed: seed | 0, depth }, map };
+  const tags = modNames(mods), rule = kind.rule | (mods & MOD.DAWN ? RULE.DAWN : 0) | (mods & MOD.SILENT ? RULE.SILENT : 0);
+  return { id: kind.theme, title: `Endless Choir — Verse ${depth} (${kind.title}${tags.length ? ' · ' + tags.join(' · ') : ''})`, rule, need: kind.rule & RULE.BRAZIERS ? 0 : need, indoor: 1, dark: kind.rule & RULE.BRAZIERS ? 1 : 0, hint: kind.hint + (mods & MOD.DAWN ? ' Keep west of a wall when the cry goes up.' : ''), endless: { seed: seed | 0, depth, mods }, map };
 }
 
 /** A weekly challenge seed shared by every player: ISO week number of the given date (UTC). */

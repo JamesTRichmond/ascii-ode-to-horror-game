@@ -20,7 +20,7 @@ export const STANZAS = [
 ];
 
 // rule flags
-export const RULE = { MUTE_START: 1, FOUNDATIONS: 2, PHASE_TIMER: 4, BREATH_HUNT: 8, BRAZIERS: 16, MULTITUDE: 32, LAYERS: 64, DAWN: 128, FINALE: 256 };
+export const RULE = { MUTE_START: 1, FOUNDATIONS: 2, PHASE_TIMER: 4, BREATH_HUNT: 8, BRAZIERS: 16, MULTITUDE: 32, LAYERS: 64, DAWN: 128, FINALE: 256, SILENT: 512 }; // SILENT: Endless modifier, no voice at all
 
 export const CHAPTERS = [
   {
