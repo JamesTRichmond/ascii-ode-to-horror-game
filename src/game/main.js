@@ -11,6 +11,7 @@ import { CHAPTERS, STANZAS } from '../sim/chapters.js';
 import { createBot, botInput } from '../sim/bot.js';
 import { viewOf, snapshot } from './view.js';
 import { createInput } from './input.js';
+import { ACTIONS, normalise, rebind, describe, keyName } from './bindings.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
 import { loadSave, storeSave, exportSave, importSave } from './save.js';
@@ -33,7 +34,7 @@ async function loadAssets() {
 function applySettings() {
   const s = S(), root = document.documentElement; if (G.telemetry) G.telemetry.enabled = !!s.telemetry && !!G.telemetryConfig;
   root.style.setProperty('--scale', s.textScale); root.classList.toggle('contrast', !!s.contrast); root.classList.toggle('still', !!s.reducedMotion);
-  G.audio.setVolume(s.volume); if (G.input) G.input.sensitivity = s.sensitivity; $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
+  G.audio.setVolume(s.volume); if (G.input) { G.input.sensitivity = s.sensitivity; G.input.setBindings(normalise(s.bindings)); } $('stats').hidden = !s.stats; $('debug').hidden = !s.debug;
   if (s.quality === 'auto') { G.auto ||= createAutoQuality({ start: 'medium' }); } else G.auto = null;
   setTier(G.auto ? G.auto.tier : s.quality);
   G.pl.opts.reducedMotion = !!s.reducedMotion; G.hud.still = !!s.reducedMotion; storeSave(G.save);
@@ -104,7 +105,8 @@ function endlessMenu() {
 }
 function chapterMenu() { G.hud.menu('CHAPTERS', '', CHAPTERS.map((c, i) => ({ label: `${c.id}. ${c.title}`, disabled: i >= G.save.unlocked, action: () => startChapter(i) })).concat({ label: 'Back', action: title }), 'SELECT A STANZA'); }
 function helpMenu() {
-  G.hud.menu('HOW TO PLAY', `<dl><dt>W A S D</dt><dd>Walk and strafe</dd><dt>Mouse / ← → / Q</dt><dd>Turn (click the view to capture the mouse)</dd><dt>Space (hold)</dt><dd>Hum — light, and be heard</dd><dt>F / click</dt><dd>Chord — stagger what is close</dd><dt>Shift (hold)</dt><dd>Hold your breath — silent, slow</dd><dt>E</dt><dd>Use</dd><dt>Esc / P</dt><dd>Pause</dd></dl><p>Your voice costs Breath. Everything that hears you comes.</p>`, [{ label: 'Back', primary: true, action: title }], 'ODE');
+  const b = normalise(S().bindings), k = a => describe(b, a);
+  G.hud.menu('HOW TO PLAY', `<dl><dt>${k('FWD')} · ${k('BACK')} · ${k('LEFT')} · ${k('RIGHT')}</dt><dd>Walk and strafe</dd><dt>Mouse / ${k('TURNL')} · ${k('TURNR')}</dt><dd>Turn (click the view to capture the mouse)</dd><dt>${k('HUM')} (hold)</dt><dd>Hum — light, and be heard</dd><dt>${k('CHORD')} / click</dt><dd>Chord — stagger what is close</dd><dt>${k('HOLD')} (hold)</dt><dd>Hold your breath — silent, slow</dd><dt>${k('USE')}</dt><dd>Use</dd><dt>Esc / ${k('PAUSE')}</dt><dd>Pause</dd></dl><p>Change any key under Settings → Controls.</p><p>Your voice costs Breath. Everything that hears you comes.</p>`, [{ label: 'Back', primary: true, action: title }], 'ODE');
 }
 function settingsMenu(back) {
   const s = S(), opt = (v, cur, t) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${t}</option>`;
@@ -119,7 +121,7 @@ function settingsMenu(back) {
     <label>Share anonymous diagnostics ${G.telemetryConfig ? '' : '(no endpoint in this build — nothing is sent)'} <select data-k="telemetry">${opt(false, s.telemetry, 'off')}${opt(true, s.telemetry, 'on')}</select></label>
     <label>Frame statistics <select data-k="stats">${opt(false, s.stats, 'off')}${opt(true, s.stats, 'on')}</select></label>
     <label>Inspect buffer <select data-k="debug">${['', 'radiance', 'normals', 'tangents', 'depth', 'material', 'velocity', 'leaves', 'flow', 'lic', 'switch'].map(v => opt(v, s.debug, v || 'final glyphs')).join('')}</select></label>`,
-  [{ label: 'Done', primary: true, action: back }, { label: 'Copy diagnostic report', action: copyDiagnostics }, { label: 'Transfer save', action: () => transferMenu(back) }], 'ODE');
+  [{ label: 'Done', primary: true, action: back }, { label: 'Controls', action: () => controlsMenu(back) }, { label: 'Copy diagnostic report', action: copyDiagnostics }, { label: 'Transfer save', action: () => transferMenu(back) }], 'ODE');
   m.onchange = e => { const k = e.target.dataset.k; if (!k) return; const v = e.target.value; S()[k] = v === 'true' ? true : v === 'false' ? false : e.target.type === 'range' || k === 'textScale' ? +v : v; applySettings(); };
 }
 /** Copy a report from the open dialog. Status is announced inside the dialog; if the clipboard is unavailable or
@@ -150,6 +152,22 @@ function transferMenu(back) {
     } catch (e) { msg.textContent = e.message; m.querySelector('[data-confirm]')?.remove(); }
   };
   m.querySelector('[data-file]').onchange = e => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 1 << 20) { msg.textContent = 'That file is too large to be a save.'; return; } f.text().then(t => { m.querySelector('[data-import]').value = t.trim(); check(t); }); };
+}
+/** Rebind keys: Change captures the next key press (Esc cancels); a key already in use moves to the new action. */
+function controlsMenu(back, note = '') {
+  const b = normalise(S().bindings), esc = t => String(t).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
+  const m = G.hud.menu('CONTROLS', `<p data-note role="status">${esc(note || 'Choose Change, then press the new key. Esc cancels.')}</p><table class="binds">${ACTIONS.map(([a, label]) => `<tr><th scope="row">${label}</th><td><kbd>${esc(describe(b, a))}</kbd></td><td><button data-rebind="${a}" aria-label="Change ${esc(label)}">Change</button></td></tr>`).join('')}</table>`,
+    [{ label: 'Done', primary: true, action: () => settingsMenu(back) }, { label: 'Reset to defaults', action: () => { S().bindings = null; applySettings(); controlsMenu(back, 'All keys reset to the defaults.'); } }], 'SETTINGS');
+  for (const btn of m.querySelectorAll('[data-rebind]')) btn.onclick = () => {
+    const a = btn.dataset.rebind, label = ACTIONS.find(x => x[0] === a)[1]; m.querySelector('[data-note]').textContent = `Press a key for “${label}”…`; btn.textContent = '…'; G.input.capture = true;
+    const grab = e => {
+      e.preventDefault(); e.stopImmediatePropagation(); removeEventListener('keydown', grab, true); G.input.capture = false;
+      if (e.code === 'Escape') { controlsMenu(back, 'Cancelled.'); return; }
+      try { const r = rebind(b, a, e.code); S().bindings = r.bindings; applySettings(); controlsMenu(back, `${label}: ${keyName(e.code)}${r.moved ? ` (taken from “${ACTIONS.find(x => x[0] === r.moved)[1]}”)` : ''}.`); document.querySelector(`[data-rebind="${a}"]`)?.focus(); }
+      catch (err) { controlsMenu(back, err.message); }
+    };
+    addEventListener('keydown', grab, true);
+  };
 }
 const copyDiagnostics = () => copyFromDialog(JSON.stringify(G.telemetry?.report() ?? {}, null, 2), 'Diagnostic report copied.');
 function crashed(report) {

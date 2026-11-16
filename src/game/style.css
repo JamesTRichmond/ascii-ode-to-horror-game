@@ -62,3 +62,5 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
 #vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(120, 8, 4, .55) 100%); }
 #resonance { color: var(--cyan); letter-spacing: .08em; }
 #resonance:empty { display: none; }
+.binds { border-collapse: collapse; width: 100%; } .binds th { text-align: left; font-weight: 400; color: var(--dim); padding: 2px 8px 2px 0; } .binds td { padding: 2px 6px; }
+.binds kbd { font: inherit; color: var(--ink); border: 1px solid var(--line); padding: 0 6px; white-space: nowrap; }
