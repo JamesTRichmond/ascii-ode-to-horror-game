@@ -1,6 +1,6 @@
 # ODE — a horror in nine stanzas
 
-A first-person horror game rendered entirely in volumetric ASCII, built on Arthur O'Shaughnessy's
+A top-down horror game rendered entirely in volumetric ASCII, built on Arthur O'Shaughnessy's
 poem *Ode*. Nine chapters; chapter *N* is stanza *N*.
 
 ## Run

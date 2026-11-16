@@ -7,7 +7,7 @@
 
 ## One line
 
-A first-person voice-and-stealth horror game in which the world is literally written in glyphs by a
+A voice-and-stealth horror game, watched from above, in which the world is literally written in glyphs by a
 Choir that dreams ages into existence — and you are the one singer who stopped.
 
 ## Premise
@@ -27,7 +27,7 @@ survive — and more audible to the Choir, who want their missing part back.
 | Axis | Decision |
 |---|---|
 | Sub-genre | Cosmic / folk psychological horror, stealth-survival |
-| Perspective | First person, continuous 3D scene rendered as volumetric ASCII |
+| Perspective | Top-down dimetric (45° azimuth, 2:1 tile edges), the camera following the singer through a continuous 3D scene rendered as volumetric ASCII; first person as an option |
 | Tone | Dread over gore. No blood; things are *unwritten*, not wounded |
 | Session | 9 chapters, 6–12 minutes each; 60–100 minutes for a first run |
 | Fail state | Being unwritten (health 0) restarts the chapter from its opening checkpoint |
@@ -37,7 +37,7 @@ survive — and more audible to the Choir, who want their missing part back.
 
 | Mechanic | Input | What it does | Horror cost |
 |---|---|---|---|
-| Walk / turn | `WASD`, mouse or arrows | Grid-collided first-person movement | Footsteps are audible to listeners |
+| Walk / turn | `WASD` (screen-relative), stick or arrows; mouse-look in first person | Grid-collided movement | Footsteps are audible to listeners |
 | **Hum** | hold `Space` | Emits radiance: lights surfaces and fog through the radiance cascades, reveals measures, wakes mechanisms | Drains **Breath**; attracts everything that hears |
 | **Chord** | `F` / click | A short forward burst that staggers and unwrites nearby threats; leaves a decaying glyph wake | Large Breath cost, long cooldown, heard map-wide |
 | Hold breath | hold `Shift` | Silent, slow movement; Breath does not regenerate | Cannot hum or strike |
@@ -58,7 +58,7 @@ decay through `@ → % → * → . →` nothing. The style is specified by `noct
 
 ## Audience
 
-- Players of atmospheric first-person horror (stealth-first, low combat) who finish 1–2 hour games.
+- Players of atmospheric stealth horror (stealth-first, low combat) who finish 1–2 hour games.
 - Roguelike / terminal-aesthetic players who want that look with real depth and lighting.
 - Runs in a desktop browser with keyboard and mouse; no install, no account, no network after load.
 - Content: dread, pursuit, existential themes. No gore, no sexual content, no real-world hate imagery.

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Camera: top-down dimetric view by default** (#44). An orthographic camera at 45° azimuth with 2:1 tile edges
+  follows the singer, who is now a visible figure in the scene; the lantern light, hum and flame emitters and voice
+  bursts come from the singer. Ceilings are not drawn from above; walls near the singer along the view are cut away
+  (`occlusionMode`). Movement is screen-relative (W/A/S/D and the left stick name a screen direction; the shell emits
+  the same facing-relative input words, so saves, replays and ghost runs are unchanged). The listener and the caption
+  arrows are oriented to the screen.
+- **Settings → Camera** keeps the original first-person view as a live-switchable option (mouse-look, pointer lock,
+  facing-relative movement, facing-relative audio). Photo mode keeps the free perspective camera in both modes.
+- The renderer's camera is now an interface (`src/render/camera.js`: `project`, `unproject`, `ray`, `pixelScale`,
+  `forward`) with a perspective and a dimetric implementation; the first-person output is byte-identical.
+
+### Added
+- Nine dimetric visual goldens next to the nine first-person ones; camera and screen-relative input unit tests;
+  the browser check runs every chapter in both modes and measures the singer on screen.
+
+### Follow-ups
+- Store key art and screenshots still show the first-person view.
+
 ## 1.1.0-rc.1 — Phase 6 (Post-launch & live operations)
 
 ### Added

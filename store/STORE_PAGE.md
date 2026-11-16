@@ -7,7 +7,7 @@ ODE — a horror in nine stanzas
 The world is a song. You are the singer who stopped.
 
 ## Short description (≤ 300 characters)
-A first-person horror game drawn entirely in light-sensitive glyphs. Nine chapters, one for each
+A top-down horror game drawn entirely in light-sensitive glyphs. Nine chapters, one for each
 stanza of O'Shaughnessy's *Ode*. Your voice lights the dark and draws the things that listen.
 
 ## Long description

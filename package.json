@@ -3,7 +3,7 @@
   "version": "1.1.0-rc.1",
   "private": true,
   "type": "module",
-  "description": "First-person horror in volumetric ASCII, after Arthur O'Shaughnessy's Ode.",
+  "description": "Top-down horror in volumetric ASCII, after Arthur O'Shaughnessy's Ode.",
   "license": "MIT",
   "engines": {
     "node": ">=20"

@@ -88,6 +88,28 @@ Browser (`node tools/browser-check.mjs --seconds 10`, auto quality, software GL)
 play mode with **0 console errors**, frame p50 34.4–51.3 ms, p95 88.7–125.6 ms (includes start-up
 frames). Glyph switch p95 in play 16.9–29.8 %.
 
+### Camera modes (`node tools/bench.mjs <tier> 60 <camera>`)
+
+Chapters 1, 3, 6 and 9 with the autoplayer moving, 55 timed frames each; whole-frame p50 / p95 in ms, Node 24.
+
+| Tier | main @ a2a4d88 (first person) | first person (this branch) | dimetric |
+|---|---|---|---|
+| low | 24.4 / — | 25.7 / 31.2 | 23.3 / 26.1 |
+| medium | 40.3 / — | 39.6 / 47.0 | 37.0 / 40.5 |
+| high | 52.4 / — | 55.5 / 64.0 | 52.2 / 57.7 |
+
+The first-person path is byte-identical to main (its differences are run-to-run noise, about ±5 %). The
+dimetric frame is slightly cheaper: the G-buffer costs more (the parallel-ray grid march, 2.0 → 5.9 ms at
+high) but the depth range is small, so the quadtree splits less and selection does less work. The world
+geometry was profiled two ways at high (480×270): a static world mesh of floor tops, risers and wall faces
+through `rasterMesh` cost 13.4–16.8 ms per chapter (876–1560 triangles); the per-column grid march costs
+0.35–1.13 ms. The march was chosen.
+
+Browser, both camera modes (`node tools/browser-check.mjs --seconds 5`, auto quality, software GL): all
+nine chapters in play mode in each mode with **0 console errors**; the singer's figure measured 135–236
+G-buffer pixels of its material in the central window in every dimetric chapter; the Camera setting
+switches live and survives a reload; Trusted Types enforced with 0 CSP violations.
+
 Budget status against the guide's targets (60 Hz simulation 16.67 ms/tick: met, sim < 1 ms; 120 Hz
 presentation 8.33 ms/frame: **not met** on this hardware). Hardware with a real GPU has not been measured.
 
