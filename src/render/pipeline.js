@@ -45,7 +45,7 @@ export function createPipeline(atlas, noise, quality = 'high') {
     w, h, quality, atlas, noise, gb: createGBuffer(w, h), cam: makeCamera(w, h), prevCam: makeCamera(w, h), qt: createQuadtree(w, h, cap), flow: createFlow(w, h), fog: createFog(w, h, 4),
     sel: createSelector(w, h, cap, atlas, noise), trails: new DecayField(900), world: null, cascades: null, shadow: null, instances: new Map(), firstFrame: true, time: 0,
     opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2, autoExposure: false }, flash: 0, humLevel: 0, ae: createExposure(), follow: null,
-    stats: { ms: { gbuffer: 0, light: 0, fog: 0, tree: 0, flow: 0, select: 0, total: 0 }, tris: 0, cascade: null },
+    stats: { ms: { gbuffer: 0, light: 0, fog: 0, tree: 0, flow: 0, select: 0, total: 0 }, tris: 0, player: 0, cascade: null },
     env: null,
   };
   return pl;
@@ -104,6 +104,8 @@ function instance(pl, key) { let i = pl.instances.get(key); if (!i) { i = { x: 0
  * view: {x,z (metres), yaw (rad), bob, ents:[{type,x,z,yaw,mode}], sim, camera: 'dimetric' | 'first', player?: {x,z,yaw}}
  * The player pose defaults to the view itself; photo mode moves the view and leaves the singer where they stand.
  */
+/** G-buffer pixels of the singer's material in the central 40 % window: the acceptance check that the figure is on screen. */
+function playerPixels(gb) { const { w, h, material } = gb; let n = 0; for (let y = (h * 0.3) | 0; y < h * 0.7; y++) for (let x = (w * 0.3) | 0; x < w * 0.7; x++) if (material[y * w + x] === 16) n++; return n; }
 export function renderFrame(pl, view, dt) {
   const t0 = now(), { gb, cam, prevCam, world, cascades: c, fog, sim: _ } = pl, sim = view.sim, th = THEMES[sim.def.id], ms = pl.stats.ms;
   pl.time += pl.opts.reducedMotion ? 0 : dt; const time = pl.time, dim = view.camera === 'dimetric', pv = view.player || view, eyeY = view.y ?? 1.62 + (view.hold ? -0.25 : 0);
@@ -137,7 +139,7 @@ export function renderFrame(pl, view, dt) {
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) if (sim.tiles[z * sim.w + x] === 66 && sim.dyn[z * sim.w + x]) draw('b' + (z * sim.w + x), 'flame', (x + 0.5) * CELL, 0.9, (z + 0.5) * CELL, time * 0.6, { sway: 0.08, phase: x });
   if (th.body && !dim) draw('sky', th.body, cam.x + th.dir[0] * 320, cam.y + th.dir[1] * 320, cam.z + th.dir[2] * 320, 0, { scale: th.body === 'sun' ? 30 : 15 }); // no horizon from above
   for (const [k, i] of pl.instances) if (!i.used) pl.instances.delete(k);
-  pl.stats.tris = tris; const t1 = now(); ms.gbuffer = t1 - t0;
+  pl.stats.tris = tris; pl.stats.player = dim || view.player ? playerPixels(gb) : 0; const t1 = now(); ms.gbuffer = t1 - t0;
   // ---- transported light ----
   const T = TEXELS_PER_CELL, tm = CELL / T; c.emit.fill(0);
   if (world.dirty || c.solidFor !== world) { // occupancy only changes with the world (walls rising, gates, phases)

@@ -374,7 +374,7 @@ function frameBody(t) {
 async function boot() {
   try { await loadAssets(); } catch (e) { setHTML($('menu'), html`<div class="card"><h1>ODE</h1><p>Could not load the glyph atlas (${String(e.message || e)}). Serve the folder over HTTP: <code>npm start</code>.</p></div>`); return; }
   const canvas = $('view'); resize(); addEventListener('resize', resize);
-  if (params.get('quality')) S().quality = params.get('quality'); if (params.get('stats')) S().stats = true;
+  if (params.get('quality')) S().quality = params.get('quality'); if (params.get('stats')) S().stats = true; if (params.get('camera')) S().camera = params.get('camera') === 'first' ? 'first' : 'dimetric';
   if (!params.get('cpu')) try { G.out = createGLOutput(canvas, G.atlas, G.atlasImage); } catch (e) { console.warn('WebGL2 output unavailable:', e); G.out = null; }
   if (!G.out) { // last-resort CPU compositor fallback
     const oc = new OffscreenCanvas(G.atlasImage.width, G.atlasImage.height), o2 = oc.getContext('2d'); o2.drawImage(G.atlasImage, 0, 0); const d = o2.getImageData(0, 0, oc.width, oc.height);
@@ -392,7 +392,7 @@ async function boot() {
   addEventListener('keydown', e => photoKey(e, true)); addEventListener('keyup', e => photoKey(e, false));
   $('view').addEventListener('pointermove', e => { if (G.mode === 'photo' && e.buttons & 1) G.photo.yaw += e.movementX * 0.004; });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
-  globalThis.__ode = { G, startChapter, startEndless, title, security: () => ({ trustedTypes: trustedTypesEnforced(), ...htmlStats }), hashState: () => hashState(G.sim), stats: () => ({ tier: G.pl.quality, auto: G.auto ? { tier: G.auto.tier, changes: G.auto.changes, lastP95: G.auto.lastP95 } : null, frames: [...G.frames], intervals: [...G.intervals], switchRates: [...G.switchRates], ms: { ...G.pl.stats.ms }, leaves: { ...G.pl.qt.stats }, glyphs: { ...G.pl.sel.stats }, out: G.out ? { ...G.out.stats, kind: G.out.kind } : { kind: 'cpu' }, tick: G.sim?.tick, mode: G.mode, chapter: G.chapter, cascade: G.pl.stats.cascade }) };
+  globalThis.__ode = { G, startChapter, startEndless, title, security: () => ({ trustedTypes: trustedTypesEnforced(), ...htmlStats }), hashState: () => hashState(G.sim), stats: () => ({ tier: G.pl.quality, auto: G.auto ? { tier: G.auto.tier, changes: G.auto.changes, lastP95: G.auto.lastP95 } : null, frames: [...G.frames], intervals: [...G.intervals], switchRates: [...G.switchRates], ms: { ...G.pl.stats.ms }, leaves: { ...G.pl.qt.stats }, glyphs: { ...G.pl.sel.stats }, out: G.out ? { ...G.out.stats, kind: G.out.kind } : { kind: 'cpu' }, tick: G.sim?.tick, mode: G.mode, chapter: G.chapter, cascade: G.pl.stats.cascade, camera: cameraMode(), playerPx: G.pl.stats.player }) };
   requestAnimationFrame(frame);
   let shared = null; try { shared = params.get('seed') ? decodeSeed(params.get('seed')) : null; } catch (e) { console.info('ignoring ?seed:', e.message); }
   const urlMods = (+params.get('mods') || 0) & 7;

@@ -31,13 +31,13 @@ let current = null;
 function route(m) {
   if (m.type === 'error') { C.onError?.({ message: `render worker: ${m.message}`, stack: m.stack }); return; }
   const p = current; if (!p || m.type !== 'frame') return; p.busy = false; if (!m.stats || m.w !== p.w || m.h !== p.h) { if (p.queued) { const q = p.queued; p.queued = null; dispatch(p, q); } return; } // a frame from before a tier change is dropped
-  p.sel.inst = m.inst; p.sel.count = m.count; p.sel.stats = m.stats.sel; p.qt.stats = m.stats.qt; Object.assign(p.stats, { ms: m.stats.ms, tris: m.stats.tris, cascade: m.stats.cascade, exposure: m.stats.exposure }); p.frames++;
+  p.sel.inst = m.inst; p.sel.count = m.count; p.sel.stats = m.stats.sel; p.qt.stats = m.stats.qt; Object.assign(p.stats, { ms: m.stats.ms, tris: m.stats.tris, player: m.stats.player, cascade: m.stats.cascade, exposure: m.stats.exposure }); p.frames++;
   if (p.queued) { const q = p.queued; p.queued = null; dispatch(p, q); }
 }
 export function createPipeline(atlas, noise, quality = 'high') {
   if (C.mode === 'local') return local.createPipeline(atlas, noise, quality);
   spawn(); const [w, h] = QUALITY[quality] || QUALITY.high;
-  const p = { remote: true, w, h, quality, opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2 }, stats: { ms: { gbuffer: 0, light: 0, fog: 0, tree: 0, flow: 0, select: 0, total: 0 }, tris: 0, cascade: null },
+  const p = { remote: true, w, h, quality, opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2 }, stats: { ms: { gbuffer: 0, light: 0, fog: 0, tree: 0, flow: 0, select: 0, total: 0 }, tris: 0, player: 0, cascade: null },
     sel: { inst: new Float32Array(0), count: 0, stats: { switchRate: 0 } }, qt: { stats: { leaves: 0, overflow: 0, byLevel: [0, 0, 0, 0], flips: 0 } }, cam: { yaw: 0 }, flash: 0, bursts: [], busy: false, queued: null, frames: 0, sim: null };
   current = p; return p;
 }

@@ -2,8 +2,12 @@
 // Browser acceptance checks (needs a local Playwright + Chromium; not a project dependency).
 // Usage: node tools/browser-check.mjs [--dir dist] [--out dir] [--seconds 6] [--quality auto] [--gpu]
 // Starts the static server itself, then reports JSON:
-//   chapters  every chapter loads in play mode with zero console errors and the autoplay bot driving; frame p50/p95
+//   chapters  every chapter loads in play mode, in both camera modes (dimetric and first person), with zero console
+//             errors and the autoplay bot driving; frame p50/p95; under the dimetric camera the singer's figure is on
+//             screen (G-buffer pixels of its material near the centre)
 //   ui        title -> begin -> pause (Esc) -> settings -> resume, keyboard focus trap, audio running
+//   camera    Settings → Camera switches live (dimetric releases the pointer, first person captures it) and the
+//             choice survives a reload
 //   liveops   Endless Choir loads; a deliberate fault shows the crash overlay with replay context, sends nothing;
 //             dying in Endless ends the run (mode dead, input off, run-over card)
 //   security  Trusted Types enforced; every menu, card and overlay opens with zero CSP violations and zero policy
@@ -31,12 +35,12 @@ const base = `http://localhost:${port}/`, report = { browser: browser.version(),
 const watch = p => { const errs = []; p.on('pageerror', e => errs.push(String(e))); p.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !/AudioContext was not allowed/.test(m.text())) errs.push(m.text()); }); return errs; };
 const q = (a, f) => { const s = [...a].sort((x, y) => x - y); return +(s[Math.min(s.length - 1, Math.floor(s.length * f))] || 0).toFixed(1); };
 try {
-  for (let c = 1; c <= 9; c++) {
+  for (const camera of ['dimetric', 'first']) for (let c = 1; c <= 9; c++) {
     const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
-    await p.goto(`${base}?chapter=${c}&autoplay=1&quality=${quality}`); await p.waitForTimeout(seconds * 1000);
+    await p.goto(`${base}?chapter=${c}&autoplay=1&quality=${quality}&camera=${camera}`); await p.waitForTimeout(seconds * 1000);
     const s = await p.evaluate(() => globalThis.__ode.stats()), botInputs = await p.evaluate(() => __ode.G.bot ? __ode.G.log.filter(Boolean).length : -1);
-    if (out) await p.screenshot({ path: path.join(out, `chapter${c}.png`) });
-    report.chapters.push({ chapter: c, tier: s.tier, mode: s.mode, tick: s.tick, output: s.out.kind, glyphs: s.glyphs.emitted, frameP50: q(s.frames, 0.5), frameP95: q(s.frames, 0.95), botInputs, switchP95: q(s.switchRates.map(v => v * 100), 0.95), errors: errs });
+    if (out) await p.screenshot({ path: path.join(out, `chapter${c}${camera === 'first' ? '-first' : ''}.png`) });
+    report.chapters.push({ chapter: c, camera: s.camera, tier: s.tier, mode: s.mode, tick: s.tick, output: s.out.kind, glyphs: s.glyphs.emitted, playerPx: s.playerPx, frameP50: q(s.frames, 0.5), frameP95: q(s.frames, 0.95), botInputs, switchP95: q(s.switchRates.map(v => v * 100), 0.95), errors: errs });
     await p.close();
   }
   { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
@@ -52,6 +56,14 @@ try {
     await p.evaluate(() => { const G = __ode.G, ev = G.audio.event; G.__presented = 0; G.audio.event = e => { G.__presented++; ev(e); }; G.input.poll = () => 128; });
     await p.waitForTimeout(1500); const events = await p.evaluate(() => ({ presented: __ode.G.__presented, pending: __ode.G.sim.events.length }));
     report.ui = { title, paused, focusCycle: tabs, selects, ...st, events, errors: errs }; await p.close(); }
+  { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p); // the camera setting: live switch, pointer lock only in first person, persisted across a reload
+    await p.goto(base + '?chapter=3&quality=low'); await p.waitForFunction(() => globalThis.__ode?.G.sim); await p.waitForTimeout(800);
+    const probe = () => p.evaluate(() => ({ camera: __ode.stats().camera, screenYaw: __ode.G.input.screenYaw, locked: !!document.pointerLockElement, saved: JSON.parse(localStorage.getItem('ode.save.v1')).settings.camera ?? 'dimetric', playerPx: __ode.stats().playerPx }));
+    await p.mouse.click(640, 360); await p.waitForTimeout(300); const dimetric = await probe();
+    await p.keyboard.press('Escape'); await p.waitForTimeout(200); await p.click('text=Settings'); await p.selectOption('select[data-k="camera"]', 'first'); await p.click('text=Done'); await p.click('text=Resume'); await p.waitForTimeout(500);
+    await p.mouse.click(640, 360); await p.waitForTimeout(300); const first = await probe();
+    await p.reload(); await p.waitForFunction(() => globalThis.__ode?.G.sim); await p.waitForTimeout(800); const reloaded = await probe();
+    report.camera = { dimetric, first, reloaded, errors: errs }; await p.close(); }
   { const p = await browser.newPage({ viewport: { width: 1280, height: 720 } }), errs = watch(p);
     await p.goto(`${base}?endless=7&depth=2&autoplay=1&quality=low`); await p.waitForTimeout(3000);
     const e = await p.evaluate(() => ({ kicker: document.getElementById('chapterKicker').textContent, mode: __ode.G.mode, tick: __ode.G.sim.tick }));
@@ -102,7 +114,9 @@ const uiOk = !!report.ui && report.ui.selects.length > 0 && report.ui.selects.ev
 const SEC_CARDS = ['ODE', 'HOW TO PLAY', 'SETTINGS', 'CHAPTERS', 'ENDLESS CHOIR', 'PAUSED', 'UNWRITTEN', 'YOU SING', 'VERSE 2', 'SOMETHING BROKE'];
 const sec = report.security, secOk = !!sec && sec.trustedTypes === true && !sec.violations.length && sec.rejected === 0 && sec.accepted >= new Set(sec.cards.filter(Boolean)).size && !sec.errors.length
   && SEC_CARDS.every(t => sec.cards.includes(t)) && Object.entries(sec.probes).every(([k, v]) => k === 'pwned' ? v === false : k === 'reported' ? ['require-trusted-types-for', 'trusted-types'].every(d => v.includes(d)) : v === true);
-const ok = secOk && report.chapters.every(c => c.mode === 'play' && c.botInputs > 0 && !c.errors.length) && uiOk && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length)
+const cam = report.camera, camOk = !!cam && cam.dimetric.camera === 'dimetric' && cam.dimetric.screenYaw != null && !cam.dimetric.locked && cam.dimetric.playerPx > 0
+  && cam.first.camera === 'first' && cam.first.screenYaw == null && cam.first.saved === 'first' && cam.reloaded.camera === 'first' && !cam.errors.length; /* a real pointer lock needs a user gesture the harness cannot always give, so only its absence under dimetric is asserted */
+const ok = secOk && report.chapters.every(c => c.mode === 'play' && c.botInputs > 0 && !c.errors.length && (c.camera !== 'dimetric' || c.playerPx > 0)) && camOk && uiOk && report.hud.every(h => !h.overlaps.length && !h.horizontalScroll && !h.errors.length)
   && report.liveops?.endless.mode === 'play' && report.liveops?.crash.overlay === 'SOMETHING BROKE' && report.liveops.crash.sent === 0 && report.liveops.crash.hasReplayContext
   && report.liveops.recovered.mode === 'play' && report.liveops.recovered.crashes === report.liveops.crash.crashes && report.liveops.recovered.depth === 2 && !report.liveops.errors.length
   && report.liveops.dead.mode === 'dead' && report.liveops.dead.inputEnabled === false && report.liveops.dead.card === 'UNWRITTEN' && report.liveops.dead.kicker === 'ENDLESS CHOIR';
