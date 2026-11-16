@@ -1,5 +1,5 @@
 // Input collection. Produces one packed integer word per simulation tick; nothing here is authoritative.
-import { packInput } from '../sim/sim.js';
+import { IN, packInput } from '../sim/sim.js';
 import { DEFAULT_BINDINGS, keymap } from './bindings.js';
 
 export function createInput(canvas, opts) {
