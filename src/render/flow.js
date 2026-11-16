@@ -1,6 +1,8 @@
 // Surface flow (guide phase 4, task 3-1): structure tensor -> edge tangent flow (ETF) with sign
 // alignment -> optional line integral convolution. Works on the micro-cell grid (2x3 pixels).
 import { FAR, octDecode } from './gbuffer.js';
+import { projectDirection } from './camera.js';
+export { projectDirection };
 import { MATERIALS } from '../shared/materials.js';
 
 export const CELL_W = 2, CELL_H = 3;
@@ -21,11 +23,6 @@ export function tensorTangent(jxx, jxy, jyy, out) {
 /** +1 or -1 so that b points into the same half-plane as a (t and -t are the same line). */
 export const signAlign = (ax, ay, bx, by) => (ax * bx + ay * by < 0 ? -1 : 1);
 
-/** Screen-space direction (pixels per metre) of world direction (tx,ty,tz) at pixel (sx,sy) with depth d. */
-export function projectDirection(cam, sx, sy, d, tx, ty, tz, out) {
-  const ax = tx * cam.rx + tz * cam.rz, az = tx * cam.fx + tz * cam.fz, xc = ((sx - cam.w / 2) * d) / cam.f, yc = (-(sy - cam.cy) * d) / cam.f;
-  out[0] = (cam.f * (ax * d - xc * az)) / (d * d); out[1] = (-cam.f * (ty * d - yc * az)) / (d * d); return out;
-}
 
 export function computeFlow(fl, gb, cam, opts = {}) {
   const { w, h, lum, depth, material, object, tangent } = gb, { gw, gh, jxx, jxy, jyy, tmp } = fl, n = gw * gh, T = [0, 0, 0], D = [0, 0], V = [0, 0, 0];

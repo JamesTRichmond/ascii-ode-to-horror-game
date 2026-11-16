@@ -6,7 +6,7 @@
 //   material  Uint8     material id (src/shared/materials.js)
 //   object    Uint8     0 = static world, n = dynamic instance n (identity for history rejection)
 //   velocity  Float32x2 current minus previous screen position, in pixels (camera + object motion)
-// World axes: +y up, plan (x, z). Camera yaw 0 looks along +x; right = (-sin, cos).
+// World axes: +y up, plan (x, z). Camera yaw 0 looks along +x; right = (-sin, cos). Cameras live in camera.js.
 export const FAR = 1e4;
 export const CELL = 2; // metres per map cell
 
@@ -31,23 +31,8 @@ export function octDecode(src, o, out) {
   const l = 1 / Math.hypot(x, y, z); out[0] = x * l; out[1] = y * l; out[2] = z * l; return out;
 }
 
-export function makeCamera(w, h, fovDeg = 74) {
-  return { w, h, f: (w / 2) / Math.tan((fovDeg * Math.PI) / 360), x: 0, y: 1.6, z: 0, yaw: 0, cy: h / 2, fx: 1, fz: 0, rx: 0, rz: 1 };
-}
-export function setCamera(cam, x, y, z, yaw, bob = 0) {
-  cam.x = x; cam.y = y; cam.z = z; cam.yaw = yaw; cam.fx = Math.cos(yaw); cam.fz = Math.sin(yaw); cam.rx = -cam.fz; cam.rz = cam.fx; cam.cy = cam.h / 2 + bob; return cam;
-}
-export const copyCamera = (dst, src) => Object.assign(dst, src);
-/** World -> [screenX, screenY, perpendicular depth]. */
-export function project(cam, px, py, pz, out) {
-  const qx = px - cam.x, qz = pz - cam.z, zc = qx * cam.fx + qz * cam.fz, xc = qx * cam.rx + qz * cam.rz;
-  out[0] = cam.w / 2 + (xc * cam.f) / zc; out[1] = cam.cy - ((py - cam.y) * cam.f) / zc; out[2] = zc; return out;
-}
-/** Pixel centre + depth -> world position. */
-export function unproject(cam, sx, sy, depth, out) {
-  const a = (sx - cam.w / 2) / cam.f;
-  out[0] = cam.x + (cam.fx + cam.rx * a) * depth; out[2] = cam.z + (cam.fz + cam.rz * a) * depth; out[1] = cam.y - ((sy - cam.cy) * depth) / cam.f; return out;
-}
+export { makeCamera, setCamera, copyCamera, project, unproject } from './camera.js';
+import { project, unproject } from './camera.js';
 
 /**
  * Trace the height-field world into the G-buffer, one DDA per column, exact per-pixel depth.

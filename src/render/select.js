@@ -3,8 +3,9 @@
 // history, and given a surface-attached transform from the SVD-clamped projection Jacobian.
 import { MATERIALS } from '../shared/materials.js';
 import { descriptorLayout, normalizeDescriptor } from '../shared/descriptor.js';
-import { FAR, octDecode, unproject, project } from './gbuffer.js';
-import { CELL_W, CELL_H, projectDirection, clampJacobian, signAlign } from './flow.js';
+import { FAR, octDecode } from './gbuffer.js';
+import { unproject, project, projectDirection, pixelScale, metresPerPixel } from './camera.js';
+import { CELL_W, CELL_H, clampJacobian, signAlign } from './flow.js';
 import { MAX_LEVEL } from './quadtree.js';
 import { responseAlpha, shouldSwitch, historyValid, densityGlyph, SWITCH_MARGIN } from './temporal.js';
 import { hash2 } from './light.js';
@@ -122,7 +123,7 @@ export function selectGlyphs(sel, gb, qt, fl, cam, prevCam, env) {
       if (mt.warp) {
         octDecode(tangent, ci * 2, T); const tn = T[0] * N[0] + T[1] * N[1] + T[2] * N[2]; T[0] -= N[0] * tn; T[1] -= N[1] * tn; T[2] -= N[2] * tn; const tl = Math.hypot(T[0], T[1], T[2]) || 1; T[0] /= tl; T[1] /= tl; T[2] /= tl;
         projectDirection(cam, sx, sy, d, T[0], T[1], T[2], D0); projectDirection(cam, sx, sy, d, N[1] * T[2] - N[2] * T[1], N[2] * T[0] - N[0] * T[2], N[0] * T[1] - N[1] * T[0], D1);
-        const k = d / cam.f; J[0] = D0[0] * k; J[2] = D0[1] * k; J[1] = D1[0] * k; J[3] = D1[1] * k;
+        const k = metresPerPixel(cam, d); J[0] = D0[0] * k; J[2] = D0[1] * k; J[1] = D1[0] * k; J[3] = D1[1] * k;
         if (mt.wOrient >= 0.5) { // organic: rotate the frame so the glyph's stroke axis follows the (ETF + motion) flow
           let ga = atlas.aniso[glyph] > 0.45 ? atlas.angle[glyph] : 0; if (ga > Math.PI / 2) ga -= Math.PI;
           const want = Math.atan2(fy, fx) - ga + (jn - 0.5) * mt.jitter, have = Math.atan2(J[2], J[0]), dl = want - have, c = Math.cos(dl), s = Math.sin(dl), a0 = J[0], a1 = J[1], a2 = J[2], a3 = J[3];
@@ -151,7 +152,7 @@ export function appendTrails(sel, field, gb, cam) {
     project(cam, field.pos[i * 3], field.pos[i * 3 + 1], field.pos[i * 3 + 2], S);
     if (S[2] < 0.3 || S[0] < 0 || S[1] < 0 || S[0] >= gb.w || S[1] >= gb.h || S[2] > gb.depth[(S[1] | 0) * gb.w + (S[0] | 0)] + 0.15) continue;
     const dn = field.density[i], ch = densityGlyph(dn, noise[(i * 37) & 1023] / 256); if (!ch) continue;
-    const size = Math.max(1.6, Math.min(9, (cam.f / S[2]) * 0.085 * (0.6 + dn))), o = n * INSTANCE_FLOATS, k = 0.5 + 2.2 * dn;
+    const size = Math.max(1.6, Math.min(9, pixelScale(cam, S[2]) * 0.085 * (0.6 + dn))), o = n * INSTANCE_FLOATS, k = 0.5 + 2.2 * dn;
     inst[o] = S[0]; inst[o + 1] = S[1]; inst[o + 2] = size * EX; inst[o + 3] = 0; inst[o + 4] = 0; inst[o + 5] = size * 1.5 * EY; inst[o + 6] = atlas.glyph(ch);
     inst[o + 7] = field.rgb[i * 3] * k; inst[o + 8] = field.rgb[i * 3 + 1] * k; inst[o + 9] = field.rgb[i * 3 + 2] * k; inst[o + 10] = Math.min(1, dn * 1.6); n++;
   }

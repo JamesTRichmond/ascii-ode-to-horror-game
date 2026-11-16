@@ -1,7 +1,8 @@
 // Frame pipeline. Order is fixed by the guide: resolve continuous geometry -> transported light
 // and fog -> adaptive leaves -> surface flow -> glyph selection with temporal history -> output.
 import { createExposure, meter, adapt } from './exposure.js';
-import { createGBuffer, makeCamera, setCamera, copyCamera, traceWorld, rasterMesh, worldVelocity, CELL } from './gbuffer.js';
+import { createGBuffer, traceWorld, rasterMesh, worldVelocity, CELL } from './gbuffer.js';
+import { makeCamera, setCamera, copyCamera } from './camera.js';
 import { createCascades, solveCascades, addEmitter, TEXELS_PER_CELL } from './cascades.js';
 import { shade, createFog, integrateFog, compositeFog, directionalShadow } from './light.js';
 import { createQuadtree, subdivide } from './quadtree.js';
@@ -147,7 +148,7 @@ export function renderFrame(pl, view, dt) {
     world.dirty = false;
   }
   const apart = sim.def.glory && sim.c.phase === 1 ? 2.2 : 1, dirK = sim.def.dawn ? 0.25 + surge * 2.2 : 1;
-  const lantern = { intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
+  const lantern = { x: cam.x, y: cam.y - 0.25, z: cam.z, intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
   const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure * (pl.opts.autoExposure ? pl.ae.ev : 1), stars: th.stars, dt };
   shade(gb, cam, env); const t2 = now(); ms.light = t2 - t1;
   fog.sigma = th.fog * pl.opts.fogScale * apart; fog.height = th.fogH; fog.ambient = th.fogAmb.map(v => v * (1 + surge * 3)); fog.blobs = pl.mist && pl.mist.length ? pl.mist.concat(blobs) : blobs.length ? blobs : null;
