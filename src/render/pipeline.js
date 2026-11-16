@@ -1,8 +1,8 @@
 // Frame pipeline. Order is fixed by the guide: resolve continuous geometry -> transported light
 // and fog -> adaptive leaves -> surface flow -> glyph selection with temporal history -> output.
 import { createExposure, meter, adapt } from './exposure.js';
-import { createGBuffer, traceWorld, rasterMesh, worldVelocity, CELL } from './gbuffer.js';
-import { makeCamera, setCamera, copyCamera } from './camera.js';
+import { createGBuffer, traceWorld, traceWorldOrtho, rasterMesh, worldVelocity, CELL } from './gbuffer.js';
+import { makeCamera, setCamera, setDimetric, copyCamera, project, ORTHO_SCALE } from './camera.js';
 import { createCascades, solveCascades, addEmitter, TEXELS_PER_CELL } from './cascades.js';
 import { shade, createFog, integrateFog, compositeFog, directionalShadow } from './light.js';
 import { createQuadtree, subdivide } from './quadtree.js';
@@ -32,13 +32,19 @@ export const THEMES = {
 };
 const MESH_OF = { [ET.FORSAKER]: 'forsaker', [ET.CROWNED]: 'crowned', [ET.TRAMPLER]: 'trampler', [ET.MIRTH]: 'mirth', [ET.TRIUNE]: 'triune', [ET.HUSK]: 'husk', [ET.BUILDER]: 'builder', [ET.MARCHER]: 'marcher', [ET.CHORISTER]: 'chorister', [ET.COMER]: 'comer', [ET.SLUMBERER]: 'slumberer' };
 const UNIT_M = CELL / 1024; // simulation units -> metres
+/** Dimetric occlusion of the player by geometry between the camera and the singer. 'cutaway' lowers whatever could
+ *  shadow the player on the camera's side, within CUT_R metres across the view, to a CUT_H stub (knee height: a taller
+ *  stub one cell in front still hides the body at this elevation); 'none' leaves the walls standing. A fade mode would
+ *  replace this constant. */
+export const occlusionMode = 'cutaway', CUT_H = 0.6, CUT_R = 4;
+const FOLLOW_TAU = 0.12; // seconds; the dimetric camera eases toward the player (snaps under reduced motion)
 
 export function createPipeline(atlas, noise, quality = 'high') {
   const [w, h, cap] = QUALITY[quality] || QUALITY.high;
   const pl = {
     w, h, quality, atlas, noise, gb: createGBuffer(w, h), cam: makeCamera(w, h), prevCam: makeCamera(w, h), qt: createQuadtree(w, h, cap), flow: createFlow(w, h), fog: createFog(w, h, 4),
     sel: createSelector(w, h, cap, atlas, noise), trails: new DecayField(900), world: null, cascades: null, shadow: null, instances: new Map(), firstFrame: true, time: 0,
-    opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2, autoExposure: false }, flash: 0, humLevel: 0, ae: createExposure(),
+    opts: { exposure: 1, fogScale: 1, bounces: 1, reducedMotion: false, etfIterations: 2, autoExposure: false }, flash: 0, humLevel: 0, ae: createExposure(), follow: null,
     stats: { ms: { gbuffer: 0, light: 0, fog: 0, tree: 0, flow: 0, select: 0, total: 0 }, tris: 0, cascade: null },
     env: null,
   };
@@ -95,32 +101,41 @@ function instance(pl, key) { let i = pl.instances.get(key); if (!i) { i = { x: 0
 
 /**
  * Render one frame from an interpolated view of the simulation.
- * view: {x,z (metres), yaw (rad), bob, ents:[{type,x,z,yaw,mode}], sim}
+ * view: {x,z (metres), yaw (rad), bob, ents:[{type,x,z,yaw,mode}], sim, camera: 'dimetric' | 'first', player?: {x,z,yaw}}
+ * The player pose defaults to the view itself; photo mode moves the view and leaves the singer where they stand.
  */
 export function renderFrame(pl, view, dt) {
   const t0 = now(), { gb, cam, prevCam, world, cascades: c, fog, sim: _ } = pl, sim = view.sim, th = THEMES[sim.def.id], ms = pl.stats.ms;
-  pl.time += pl.opts.reducedMotion ? 0 : dt; const time = pl.time;
+  pl.time += pl.opts.reducedMotion ? 0 : dt; const time = pl.time, dim = view.camera === 'dimetric', pv = view.player || view, eyeY = view.y ?? 1.62 + (view.hold ? -0.25 : 0);
   const fov = view.fov || 74; if (fov !== (pl.fov || 74)) { pl.fov = fov; cam.f = prevCam.f = (cam.w / 2) / Math.tan((fov * Math.PI) / 360); } // photo mode may change the field of view
-  copyCamera(prevCam, cam); setCamera(cam, view.x, view.y ?? 1.62 + (view.hold ? -0.25 : 0), view.z, view.yaw, pl.opts.reducedMotion ? 0 : view.bob || 0);
-  if (pl.firstFrame) copyCamera(prevCam, cam);
+  copyCamera(prevCam, cam);
+  if (dim) { // fixed-angle camera following the singer, eased over FOLLOW_TAU
+    const f = pl.follow, k = pl.opts.reducedMotion || !f ? 1 : 1 - Math.exp(-dt / FOLLOW_TAU); pl.follow = f ? { x: f.x + (pv.x - f.x) * k, z: f.z + (pv.z - f.z) * k } : { x: pv.x, z: pv.z };
+    setDimetric(cam, pl.follow.x, pl.follow.z, ORTHO_SCALE[pl.quality] || ORTHO_SCALE.high);
+  } else { pl.follow = null; setCamera(cam, view.x, eyeY, view.z, view.yaw, pl.opts.reducedMotion ? 0 : view.bob || 0); }
+  if (pl.firstFrame || prevCam.ortho !== cam.ortho) copyCamera(prevCam, cam); // a camera switch has no history to reproject
   syncWorld(world, sim, dt);
   // ---- G-buffer ----
-  traceWorld(gb, world, cam); worldVelocity(gb, cam, prevCam);
+  if (dim) traceWorldOrtho(gb, world, cam, occlusionMode === 'cutaway' ? { x: pv.x, z: pv.z, r: CUT_R, h: CUT_H } : null); else traceWorld(gb, world, cam);
+  worldVelocity(gb, cam, prevCam);
   for (const i of pl.instances.values()) i.used = false;
-  let id = 1, tris = 0; const blobs = [];
+  let id = 1, tris = 0; const blobs = [], S = [0, 0, 0];
   const draw = (key, name, x, y, z, yaw, o = {}) => { const mesh = getMesh(name), inst = instance(pl, key); inst.x = x; inst.y = y; inst.z = z; inst.yaw = yaw; inst.scale = o.scale ?? 1; inst.sway = o.sway ?? 0; inst.phase = o.phase ?? 0; inst.squash = o.squash ?? 1; transformMesh(mesh, inst, time); tris += rasterMesh(gb, cam, prevCam, mesh, inst.wp, inst.wn, inst.wt, inst.pp, Math.min(255, id++)); };
+  // visibility: the pinhole culls behind the eye and beyond 70 m; the dimetric view culls against the screen rectangle (3 m of margin)
+  const offscreen = (x, z) => { if (!dim) { const dx = x - cam.x, dz = z - cam.z; return dx * cam.fx + dz * cam.fz < -1.5 || dx * dx + dz * dz > 70 * 70; } project(cam, x, 1.5, z, S); const m = 3 * cam.scale; return S[0] < -m || S[0] > gb.w + m || S[1] < -m || S[1] > gb.h + m; };
   view.ents.forEach((e, k) => {
     if (e.mode === 9) return;
     if (e.type === ET.SIGH) { blobs.push(e.x, 1.3, e.z, 2.6, 0.9); return; }
     if ((e.type === ET.CHORISTER) && sim.c.phase !== 1) return;
-    const dx = e.x - cam.x, dz = e.z - cam.z; if (dx * cam.fx + dz * cam.fz < -1.5 || dx * dx + dz * dz > 70 * 70) return;
+    if (offscreen(e.x, e.z)) return;
     const stag = e.mode === 8, husk = e.type === ET.HUSK && e.mode === 0;
     draw('e' + k, MESH_OF[e.type], e.x, husk ? 0.45 : 0, e.z, e.yaw, { sway: stag ? 0.09 : e.type === ET.SLUMBERER ? 0 : 0.028, phase: k * 1.7, squash: stag ? 0.86 : 1 });
   });
-  if (view.ghost && Math.hypot(view.ghost.x - cam.x, view.ghost.z - cam.z) > 1.2) draw('ghost', 'ghost', view.ghost.x, 0, view.ghost.z, view.ghost.yaw, { sway: 0.02, phase: 0.7 }); // ghost of the best run; hidden while it shares the player's space
+  if (dim || view.player) draw('player', 'player', pv.x, 0, pv.z, pv.yaw, { sway: 0.02, squash: pv.hold ? 0.9 : 1 }); // the singer is in the scene whenever the eye is not theirs
+  if (view.ghost && Math.hypot(view.ghost.x - pv.x, view.ghost.z - pv.z) > 1.2) draw('ghost', 'ghost', view.ghost.x, 0, view.ghost.z, view.ghost.yaw, { sway: 0.02, phase: 0.7 }); // ghost of the best run; hidden while it shares the player's space
   sim.picks.forEach((m, k) => { if (!m.taken) draw('m' + k, 'measure', m.x * UNIT_M, 1.25 + Math.sin(time * 1.3 + k) * 0.12, m.z * UNIT_M, time * 0.9 + k, { scale: 0.9 }); });
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) if (sim.tiles[z * sim.w + x] === 66 && sim.dyn[z * sim.w + x]) draw('b' + (z * sim.w + x), 'flame', (x + 0.5) * CELL, 0.9, (z + 0.5) * CELL, time * 0.6, { sway: 0.08, phase: x });
-  if (th.body) draw('sky', th.body, cam.x + th.dir[0] * 320, cam.y + th.dir[1] * 320, cam.z + th.dir[2] * 320, 0, { scale: th.body === 'sun' ? 30 : 15 });
+  if (th.body && !dim) draw('sky', th.body, cam.x + th.dir[0] * 320, cam.y + th.dir[1] * 320, cam.z + th.dir[2] * 320, 0, { scale: th.body === 'sun' ? 30 : 15 }); // no horizon from above
   for (const [k, i] of pl.instances) if (!i.used) pl.instances.delete(k);
   pl.stats.tris = tris; const t1 = now(); ms.gbuffer = t1 - t0;
   // ---- transported light ----
@@ -131,8 +146,8 @@ export function renderFrame(pl, view, dt) {
   }
   const p = sim.p; pl.humLevel += ((p.hum ? 1 : 0) - pl.humLevel) * Math.min(1, dt * 6); pl.flash *= Math.exp(-dt / 0.35);
   const hum = pl.humLevel * (1.5 + 0.35 * Math.sin(time * 9)) + pl.flash * 6;
-  addEmitter(c, view.x, view.z, 1.2, [0.12 + 0.5 * hum, 0.14 + 1.3 * hum, 0.16 + 1.2 * hum], tm); // the singer always carries a faint presence
-  if (p.flame) addEmitter(c, view.x + cam.fx * 0.6, view.z + cam.fz * 0.6, 1.0, [1.5, 0.66, 0.16].map(v => v * (0.85 + 0.15 * Math.sin(time * 11))), tm);
+  addEmitter(c, pv.x, pv.z, 1.2, [0.12 + 0.5 * hum, 0.14 + 1.3 * hum, 0.16 + 1.2 * hum], tm); // the singer always carries a faint presence
+  if (p.flame) addEmitter(c, pv.x + Math.cos(pv.yaw) * 0.6, pv.z + Math.sin(pv.yaw) * 0.6, 1.0, [1.5, 0.66, 0.16].map(v => v * (0.85 + 0.15 * Math.sin(time * 11))), tm);
   for (const m of sim.picks) if (!m.taken) addEmitter(c, m.x * UNIT_M, m.z * UNIT_M, 0.9, [0.35, 1.05, 1.2], tm);
   if (view.ghost) addEmitter(c, view.ghost.x, view.ghost.z, 0.8, [0.12, 0.4, 0.45], tm);
   for (let z = 0; z < sim.h; z++) for (let x = 0; x < sim.w; x++) { const t = sim.tiles[z * sim.w + x], i = z * sim.w + x;
@@ -148,7 +163,7 @@ export function renderFrame(pl, view, dt) {
     world.dirty = false;
   }
   const apart = sim.def.glory && sim.c.phase === 1 ? 2.2 : 1, dirK = sim.def.dawn ? 0.25 + surge * 2.2 : 1;
-  const lantern = { x: cam.x, y: cam.y - 0.25, z: cam.z, intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
+  const lantern = { x: pv.x, y: eyeY - 0.25, z: pv.z, intensity: (th.lantern ?? 0.55) * (1 + 1.6 * pl.humLevel) + pl.flash * 2, falloff: 0.09, color: p.flame ? [1.0, 0.62, 0.3] : [0.72, 0.86, 0.95] };
   const env = pl.env = { lantern, ambient: th.ambient.map(v => v * apart), skyTop: th.skyTop, skyHorizon: th.skyHorizon.map(v => v * (1 + surge * 2)), dir: { d: th.dir, color: th.dirColor.map(v => v * dirK) }, shadow: th.dirColor[0] > 0 ? pl.shadow : null, cascades: c, time, exposure: th.exposure * pl.opts.exposure * (pl.opts.autoExposure ? pl.ae.ev : 1), stars: th.stars, dt };
   shade(gb, cam, env); const t2 = now(); ms.light = t2 - t1;
   fog.sigma = th.fog * pl.opts.fogScale * apart; fog.height = th.fogH; fog.ambient = th.fogAmb.map(v => v * (1 + surge * 3)); fog.blobs = pl.mist && pl.mist.length ? pl.mist.concat(blobs) : blobs.length ? blobs : null;

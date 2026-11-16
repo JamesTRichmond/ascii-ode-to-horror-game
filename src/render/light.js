@@ -78,7 +78,7 @@ export function shade(gb, cam, env) {
       else if (m === 9) k = 0.7 + 0.5 * hash2(Math.floor(wx * 9), Math.floor(wz * 9));
       else if (m === 8) k = 0.6 + 0.5 * Math.sin(wx * 2.3 + time * 0.9 + Math.sin(wz * 1.7 - time * 0.6) * 1.5) ** 2;
       else if (m === 10) k = 0.6 + 0.5 * Math.sin((wx + wz) * 9 + Math.sin(wy * 3) * 2) ** 2;
-      else if (m === 4 || m === 3 || m === 11) k = 0.75 + 0.3 * Math.sin(wy * 23 + (wx + wz) * 7) ** 2;
+      else if (m === 4 || m === 3 || m === 11 || m === 16) k = 0.75 + 0.3 * Math.sin(wy * 23 + (wx + wz) * 7) ** 2;
       // direct directional light with plan-view height shadow
       let lit = Math.max(0, N[0] * L[0] + N[1] * L[1] + N[2] * L[2]);
       if (lit > 0 && sh) { const tx = Math.floor((wx / CELL) * T), tz = Math.floor((wz / CELL) * T); if (tx >= 0 && tz >= 0 && tx < tw && tz < th && !sh[tz * tw + tx] && (object[i] === 0 || wy < 1.2)) lit *= 0.12; }
@@ -138,11 +138,14 @@ export function integrateFog(fog, gb, cam, env, noise) {
   binFogBodies(fog);
   for (let fy = 0; fy < fh; fy++) for (let fx = 0; fx < fw; fx++) {
     const sx = Math.min(gb.w - 1, fx * scale + (scale >> 1)), sy = Math.min(gb.h - 1, fy * scale + (scale >> 1)), i = fy * fw + fx;
-    const d = Math.min(fog.maxDist, gb.depth[sy * gb.w + sx]); ray(cam, sx + 0.5, sy + 0.5, R);
-    const dx = R[3], dy = R[4], dz = R[5], ds = (d / steps) * Math.sqrt(dx * dx + dz * dz + dy * dy), jitter = noise ? noise[((fy & 31) << 5) | (fx & 31)] / 256 : 0.5;
+    const dep = gb.depth[sy * gb.w + sx], d = cam.ortho ? (dep >= FAR ? 0 : dep) : Math.min(fog.maxDist, dep); ray(cam, sx + 0.5, sy + 0.5, R);
+    const dx = R[3], dy = R[4], dz = R[5], jitter = noise ? noise[((fy & 31) << 5) | (fx & 31)] / 256 : 0.5;
+    // the orthographic camera sits far above the fog: march only the last stretch of the ray, from four scale heights down to
+    // the surface (rays that leave the map carry no fog)
+    const t0 = cam.ortho ? Math.max(0, d - (fog.height * 4) / Math.max(0.05, -dy)) : 0, span = d - t0, ds = (span / steps) * Math.sqrt(dx * dx + dz * dz + dy * dy);
     let T = 1, r = 0, g = 0, b = 0;
     for (let s = 0; s < steps; s++) {
-      const t = ((s + jitter) / steps) * d, px = R[0] + dx * t, pz = R[2] + dz * t, py = R[1] + dy * t;
+      const t = t0 + ((s + jitter) / steps) * span, px = R[0] + dx * t, pz = R[2] + dz * t, py = R[1] + dy * t;
       const sigma = fogDensity(fog, px, py, pz, time); if (sigma <= 0) continue;
       const Tseg = Math.exp(-sigma * ds), k = T * (1 - Tseg) * fog.albedo;
       const cx = Math.floor(px / CELL), cz = Math.floor(pz / CELL); let fr = 0, fg = 0, fb = 0;
