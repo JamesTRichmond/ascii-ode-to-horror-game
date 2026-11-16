@@ -13,6 +13,8 @@ test('the left stick and D-pad walk; a diagonal sets both axes', () => {
   assert.equal(gamepadInput(pad({ axes: [0, -1] })).buttons, IN.FWD);
   assert.equal(gamepadInput(pad({ axes: [0.7, 0.7] })).buttons, IN.BACK | IN.RIGHT);
   assert.equal(gamepadInput(pad({ down: [PAD.UP, PAD.LEFT] })).buttons, IN.FWD | IN.LEFT);
+  const a = gamepadInput(pad({ axes: [0, -1] })).stick; assert.equal(a[0], 0); assert.ok(a[1] < -0.99, 'the analogue left stick is carried for screen-relative heading');
+  assert.equal(gamepadInput(pad({ down: [PAD.UP] })).stick, undefined, 'the D-pad alone leaves no analogue stick');
 });
 test('the right stick turns with a response curve and sensitivity', () => {
   const full = gamepadInput(pad({ axes: [0, 0, 1, 0] })).turn, half = gamepadInput(pad({ axes: [0, 0, 0.6, 0] })).turn, left = gamepadInput(pad({ axes: [0, 0, -1, 0] })).turn;
