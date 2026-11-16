@@ -92,8 +92,9 @@ export function createAudio() {
   /** Per-frame continuous layers: hum level, heartbeat from threat proximity, march pulse. */
   /** Stop every continuous layer (hum, heartbeat, march); event stingers are unaffected. */
   A.silence = () => { if (!A.ready) return; A.hum.g.gain.setTargetAtTime(0, now(), 0.03); A.heart = 0; if (A.bed) A.bed.beat = 0; };
-  A.update = (sim, pl, dt, active = true) => {
-    if (!A.ready || !sim) return; const p = sim.p; A.sim = sim; A.listener = { x: p.x, z: p.z, yaw: (p.ang / 4096) * Math.PI * 2 };
+  /** `yaw` orients the listener (radians): the singer's facing when omitted, the camera azimuth under the dimetric camera. */
+  A.update = (sim, pl, dt, active = true, yaw) => {
+    if (!A.ready || !sim) return; const p = sim.p; A.sim = sim; A.listener = { x: p.x, z: p.z, yaw: yaw ?? (p.ang / 4096) * Math.PI * 2 };
     if (!active) { A.silence(); return; }
     A.hum.g.gain.setTargetAtTime(p.hum ? 0.12 : 0, now(), 0.06); A.hum.o1.detune.setTargetAtTime(p.breath < 200 ? -30 : 0, now(), 0.2);
     let near = 1e9; for (const e of sim.ents) { if (e.mode === 9 || e.type === ET.SLUMBERER || (e.type === ET.MARCHER && !p.marked) || (e.type === ET.HUSK && e.mode === 0) || ((e.type === ET.CHORISTER || e.type === ET.MIRTH) && sim.c.phase !== 1)) continue; near = Math.min(near, Math.hypot(e.x - p.x, e.z - p.z) / 1024); }
